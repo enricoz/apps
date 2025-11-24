@@ -1,75 +1,99 @@
 import { Router } from 'express';
-import { generators } from 'openid-client';
+import { z } from 'zod';
+import { nanoid } from 'nanoid';
 import { IStorage } from '../storage';
-import { generateAuthUrl, exchangeCodeForTokens, isAuthenticated } from '../middleware/auth';
+import { hashPassword, comparePassword, isAuthenticated } from '../middleware/auth';
+
+const registerSchema = z.object({
+  email: z.string().email('Email non valida'),
+  password: z.string().min(6, 'La password deve essere di almeno 6 caratteri'),
+  fullName: z.string().optional(),
+});
+
+const loginSchema = z.object({
+  email: z.string().email('Email non valida'),
+  password: z.string().min(1, 'Password richiesta'),
+});
 
 export function createAuthRoutes(storage: IStorage) {
   const router = Router();
 
-  // Login - redirect to Replit OIDC
-  router.get('/login', (req, res) => {
+  // Register
+  router.post('/register', async (req, res) => {
     try {
-      const codeVerifier = generators.codeVerifier();
-      const state = generators.state();
+      const data = registerSchema.parse(req.body);
 
-      // Store in session
-      req.session.code_verifier = codeVerifier;
-      req.session.state = state;
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(data.email);
+      if (existingUser) {
+        return res.status(400).json({ error: 'Email già registrata' });
+      }
 
-      const authUrl = generateAuthUrl(codeVerifier, state);
-      res.redirect(authUrl);
+      // Hash password
+      const hashedPassword = await hashPassword(data.password);
+
+      // Create user
+      const user = await storage.createUser({
+        id: nanoid(),
+        email: data.email,
+        password: hashedPassword,
+        fullName: data.fullName,
+      });
+
+      // Store user ID in session
+      req.session.userId = user.id;
+
+      res.json({
+        message: 'Registrazione completata',
+        user: {
+          id: user.id,
+          email: user.email,
+          fullName: user.fullName,
+        },
+      });
     } catch (error) {
-      console.error('Login error:', error);
-      res.status(500).json({ error: 'Errore durante il login' });
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors[0].message });
+      }
+      console.error('Register error:', error);
+      res.status(500).json({ error: 'Errore durante la registrazione' });
     }
   });
 
-  // OAuth callback
-  router.get('/callback', async (req, res) => {
+  // Login
+  router.post('/login', async (req, res) => {
     try {
-      const { code, state } = req.query;
+      const data = loginSchema.parse(req.body);
 
-      if (!code || typeof code !== 'string') {
-        return res.status(400).json({ error: 'Codice di autorizzazione mancante' });
-      }
-
-      if (state !== req.session.state) {
-        return res.status(400).json({ error: 'State mismatch' });
-      }
-
-      const codeVerifier = req.session.code_verifier;
-      if (!codeVerifier) {
-        return res.status(400).json({ error: 'Code verifier mancante' });
-      }
-
-      // Exchange code for tokens
-      const tokenSet = await exchangeCodeForTokens(code, codeVerifier);
-      const claims = tokenSet.claims();
-
-      // Upsert user in database
-      let user = await storage.getUserByEmail(claims.email!);
-
+      // Get user
+      const user = await storage.getUserByEmail(data.email);
       if (!user) {
-        user = await storage.createUser({
-          id: claims.sub,
-          email: claims.email!,
-          fullName: claims.name,
-          profilePicture: claims.picture,
-        });
+        return res.status(401).json({ error: 'Email o password non corretti' });
+      }
+
+      // Verify password
+      const isValid = await comparePassword(data.password, user.password);
+      if (!isValid) {
+        return res.status(401).json({ error: 'Email o password non corretti' });
       }
 
       // Store user ID in session
       req.session.userId = user.id;
 
-      // Clear OIDC session data
-      delete req.session.code_verifier;
-      delete req.session.state;
-
-      // Redirect to frontend
-      res.redirect('/');
+      res.json({
+        message: 'Login effettuato',
+        user: {
+          id: user.id,
+          email: user.email,
+          fullName: user.fullName,
+        },
+      });
     } catch (error) {
-      console.error('Callback error:', error);
-      res.status(500).json({ error: 'Errore durante l\'autenticazione' });
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors[0].message });
+      }
+      console.error('Login error:', error);
+      res.status(500).json({ error: 'Errore durante il login' });
     }
   });
 
@@ -102,8 +126,11 @@ export function createAuthRoutes(storage: IStorage) {
         family = await storage.getFamily(familyMember.familyId);
       }
 
+      // Don't send password to client
+      const { password, ...userWithoutPassword } = user;
+
       res.json({
-        user,
+        user: userWithoutPassword,
         familyMember,
         family,
       });

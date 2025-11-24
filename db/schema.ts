@@ -5,8 +5,9 @@ import { z } from 'zod';
 
 // ============ USERS TABLE ============
 export const users = pgTable('users', {
-  id: text('id').primaryKey(), // from OIDC
+  id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
+  password: text('password').notNull(), // bcrypt hashed
   fullName: text('full_name'),
   profilePicture: text('profile_picture'),
   createdAt: timestamp('created_at').notNull().defaultNow(),

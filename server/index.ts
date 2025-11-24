@@ -3,7 +3,6 @@ import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import { neon } from '@neondatabase/serverless';
 import { PostgresStorage } from './storage';
-import { initializeOIDC } from './middleware/auth';
 
 // Import routes
 import { createAuthRoutes } from './routes/auth';
@@ -62,22 +61,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// Initialize OIDC
-let oidcReady = false;
-initializeOIDC()
-  .then(() => {
-    oidcReady = true;
-    console.log('✅ Server ready with OIDC authentication');
-  })
-  .catch((error) => {
-    console.error('❌ Failed to initialize OIDC:', error);
-  });
-
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
-    oidc: oidcReady,
     authenticated: !!req.session.userId,
   });
 });
