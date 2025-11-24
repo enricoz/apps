@@ -25,17 +25,41 @@ Applicazione web full-stack per la gestione collaborativa del budget familiare.
 
 ### Backend
 - **Node.js + Express** + TypeScript
-- **PostgreSQL** (Neon serverless) con Drizzle ORM
-- **Replit Auth** (OpenID Connect) per autenticazione
+- **PostgreSQL** (Neon serverless o locale) con Drizzle ORM
+- **Autenticazione Email/Password** con bcrypt
 - **express-session** con PostgreSQL store
 
 ## 📋 Prerequisiti
 
 - Node.js 18+
-- PostgreSQL database (consigliato: Neon)
-- Account Replit per OIDC authentication
+- PostgreSQL database (locale o Neon cloud)
 
 ## 🔧 Setup
+
+### 0. Setup PostgreSQL (se non ce l'hai già)
+
+**Opzione A: PostgreSQL Cloud (Neon) - PIÙ SEMPLICE** ✅
+
+1. Vai su https://neon.tech e crea account gratuito
+2. Crea nuovo progetto
+3. Copia la connection string
+4. Usala come `DATABASE_URL` nel file `.env`
+
+**Opzione B: PostgreSQL Locale su Mac**
+
+```bash
+# Installa PostgreSQL
+brew install postgresql@15
+
+# Avvia servizio
+brew services start postgresql@15
+
+# Crea database
+createdb famiglia_db
+
+# La tua DATABASE_URL sarà:
+# postgresql://localhost/famiglia_db
+```
 
 ### 1. Installa dipendenze
 
@@ -48,15 +72,12 @@ npm install
 Copia `.env.example` in `.env` e configura:
 
 ```env
-# Database
+# Database (usa Neon o PostgreSQL locale)
 DATABASE_URL=postgresql://user:password@host/database
+# Per PostgreSQL locale su Mac:
+# DATABASE_URL=postgresql://localhost/famiglia_db
 
-# Replit Auth
-REPLIT_CLIENT_ID=your_client_id
-REPLIT_CLIENT_SECRET=your_client_secret
-REPLIT_REDIRECT_URI=http://localhost:5173/api/auth/callback
-
-# Session
+# Session (genera una stringa random)
 SESSION_SECRET=your_random_secret_min_32_chars
 
 # Server
@@ -205,10 +226,10 @@ PORT=3000
 ## 📝 API Endpoints
 
 ### Auth
-- `GET /api/auth/login` - Redirect to Replit OIDC
-- `GET /api/auth/callback` - OAuth callback
+- `POST /api/auth/register` - Registrazione nuovo utente (email, password, fullName)
+- `POST /api/auth/login` - Login con email e password
 - `POST /api/auth/logout` - Logout
-- `GET /api/auth/me` - Current user info
+- `GET /api/auth/me` - Informazioni utente corrente
 
 ### Families
 - `POST /api/families` - Create family
