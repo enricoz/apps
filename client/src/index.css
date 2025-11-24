@@ -1,0 +1,110 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Zen color palette - warm neutrals with soft accents */
+    --background: 40 20% 97%; /* Warm off-white */
+    --foreground: 30 10% 20%; /* Warm dark gray */
+
+    --card: 40 15% 99%;
+    --card-foreground: 30 10% 20%;
+
+    --popover: 40 15% 99%;
+    --popover-foreground: 30 10% 20%;
+
+    --primary: 142 40% 45%; /* Soft green */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 35 30% 88%; /* Warm beige */
+    --secondary-foreground: 30 10% 20%;
+
+    --muted: 35 20% 92%;
+    --muted-foreground: 30 8% 45%;
+
+    --accent: 195 35% 55%; /* Soft blue */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 65% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 35 15% 85%;
+    --input: 35 15% 85%;
+    --ring: 142 40% 45%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 30 15% 12%;
+    --foreground: 40 15% 92%;
+
+    --card: 30 15% 14%;
+    --card-foreground: 40 15% 92%;
+
+    --popover: 30 15% 14%;
+    --popover-foreground: 40 15% 92%;
+
+    --primary: 142 40% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 30 15% 20%;
+    --secondary-foreground: 40 15% 92%;
+
+    --muted: 30 15% 20%;
+    --muted-foreground: 40 10% 60%;
+
+    --accent: 195 35% 45%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 60% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 30 15% 20%;
+    --input: 30 15% 20%;
+    --ring: 142 40% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Mobile-first layout */
+.app-container {
+  @apply max-w-md mx-auto min-h-screen flex flex-col;
+}
+
+/* Bottom navigation spacing */
+.main-content {
+  @apply flex-1 pb-20;
+}
+
+/* Smooth transitions */
+* {
+  @apply transition-colors duration-200;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-muted rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/50;
+}
