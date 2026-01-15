@@ -1,4 +1,4 @@
-import { Route, Switch } from 'wouter';
+import { Route, Switch, useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/api';
 import { Toaster } from '@/components/ui/toaster';
@@ -11,6 +11,7 @@ import { AnalyticsPage } from '@/pages/Analytics';
 import { RevolutPage } from '@/pages/Revolut';
 import { ProfilePage } from '@/pages/Profile';
 import { OnboardingPage } from '@/pages/Onboarding';
+import { AmaltiaPage } from '@/pages/amaltia';
 
 interface AuthData {
   user: any;
@@ -19,6 +20,13 @@ interface AuthData {
 }
 
 function App() {
+  const [location] = useLocation();
+
+  // Amaltia product page - accessible without auth
+  if (location === '/amaltia' || location.startsWith('/amaltia/')) {
+    return <AmaltiaPage />;
+  }
+
   const { data: authData, isLoading } = useQuery<AuthData>({
     queryKey: ['/api/auth/me'],
     queryFn: () => apiRequest('/api/auth/me'),

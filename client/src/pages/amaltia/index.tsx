@@ -1,0 +1,1 @@
+export { AmaltiaPage } from './AmaltiaPage';
