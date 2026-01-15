@@ -1,0 +1,5 @@
+Questo è un file di test creato da Claude.
+Data: 15 gennaio 2026
+Directory: /home/user/apps
+
+Se riesci a vedere questo file dal tuo Mac, significa che la directory è sincronizzata correttamente!
