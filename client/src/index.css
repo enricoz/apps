@@ -1,69 +1,90 @@
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/600.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    /* Zen color palette - warm neutrals with soft accents */
-    --background: 40 20% 97%; /* Warm off-white */
-    --foreground: 30 10% 20%; /* Warm dark gray */
+    /* Modern fintech palette - clean, bold, professional */
+    --background: 0 0% 98%;
+    --foreground: 240 10% 10%;
 
-    --card: 40 15% 99%;
-    --card-foreground: 30 10% 20%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 10%;
 
-    --popover: 40 15% 99%;
-    --popover-foreground: 30 10% 20%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 10%;
 
-    --primary: 142 40% 45%; /* Soft green */
+    --primary: 160 84% 39%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 35 30% 88%; /* Warm beige */
-    --secondary-foreground: 30 10% 20%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 10% 30%;
 
-    --muted: 35 20% 92%;
-    --muted-foreground: 30 8% 45%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 8% 46%;
 
-    --accent: 195 35% 55%; /* Soft blue */
+    --accent: 220 70% 55%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 65% 55%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 35 15% 85%;
-    --input: 35 15% 85%;
-    --ring: 142 40% 45%;
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 100%;
 
-    --radius: 0.5rem;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 160 84% 39%;
+
+    --radius: 0.75rem;
+
+    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   .dark {
-    --background: 30 15% 12%;
-    --foreground: 40 15% 92%;
+    --background: 240 10% 6%;
+    --foreground: 0 0% 95%;
 
-    --card: 30 15% 14%;
-    --card-foreground: 40 15% 92%;
+    --card: 240 10% 9%;
+    --card-foreground: 0 0% 95%;
 
-    --popover: 30 15% 14%;
-    --popover-foreground: 40 15% 92%;
+    --popover: 240 10% 9%;
+    --popover-foreground: 0 0% 95%;
 
-    --primary: 142 40% 50%;
+    --primary: 160 84% 45%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 30 15% 20%;
-    --secondary-foreground: 40 15% 92%;
+    --secondary: 240 5% 15%;
+    --secondary-foreground: 0 0% 80%;
 
-    --muted: 30 15% 20%;
-    --muted-foreground: 40 10% 60%;
+    --muted: 240 5% 15%;
+    --muted-foreground: 220 5% 55%;
 
-    --accent: 195 35% 45%;
+    --accent: 220 70% 60%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 60% 50%;
+    --destructive: 0 62% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 30 15% 20%;
-    --input: 30 15% 20%;
-    --ring: 142 40% 50%;
+    --success: 160 84% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 55%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 240 5% 18%;
+    --input: 240 5% 18%;
+    --ring: 160 84% 45%;
   }
 }
 
@@ -72,29 +93,64 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
 /* Mobile-first layout */
 .app-container {
-  @apply max-w-md mx-auto min-h-screen flex flex-col;
+  @apply max-w-md mx-auto min-h-screen flex flex-col relative;
 }
 
 /* Bottom navigation spacing */
 .main-content {
-  @apply flex-1 pb-20;
+  @apply flex-1 overflow-y-auto;
+  padding-bottom: calc(4.5rem + var(--safe-area-bottom));
 }
 
-/* Smooth transitions */
-* {
-  @apply transition-colors duration-200;
+/* Monospace font for currency amounts */
+.font-mono {
+  font-family: 'JetBrains Mono', monospace;
 }
 
-/* Custom scrollbar */
+/* Fintech-style animations */
+@keyframes slide-up {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slide-down {
+  from { transform: translateY(-12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Glassmorphism utility */
+.glass {
+  @apply backdrop-blur-xl bg-card/80 border border-border/50;
+}
+
+/* Custom scrollbar - minimal */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 4px;
 }
 
 ::-webkit-scrollbar-track {
@@ -102,9 +158,33 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-muted rounded-full;
+  @apply bg-border rounded-full;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  @apply bg-muted-foreground/50;
+/* Hide scrollbar on mobile */
+@media (max-width: 640px) {
+  ::-webkit-scrollbar {
+    display: none;
+  }
+  * {
+    scrollbar-width: none;
+  }
+}
+
+/* Staggered animation children */
+.stagger-children > * {
+  animation: slide-up 0.4s ease-out both;
+}
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 50ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 100ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 150ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 200ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 250ms; }
+
+/* Safe area for iOS */
+@supports (padding: max(0px)) {
+  .pb-safe {
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
+  }
 }

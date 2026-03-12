@@ -28,9 +28,11 @@ function App() {
   if (isLoading) {
     return (
       <div className="app-container flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Caricamento...</p>
+        <div className="text-center animate-fade-in">
+          <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-4 shadow-lg shadow-primary/20">
+            <span className="text-xl font-bold text-primary-foreground">F</span>
+          </div>
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mt-4" />
         </div>
       </div>
     );
