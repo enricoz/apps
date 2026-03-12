@@ -30,19 +30,24 @@ export async function comparePassword(password: string, hash: string): Promise<b
   return await bcrypt.compare(password, hash);
 }
 
-// Middleware to check if user is authenticated
+// Middleware to check if user is authenticated (session or Passport)
 export function isAuthenticated(req: Request, res: Response, next: NextFunction) {
-  if (!req.session.userId) {
-    return res.status(401).json({ error: 'Non autenticato' });
+  // Check session-based auth first
+  if (req.session.userId) {
+    req.user = {
+      id: req.session.userId,
+      email: '',
+    };
+    return next();
   }
 
-  // Set user info from session
-  req.user = {
-    id: req.session.userId,
-    email: '', // Will be populated from DB in routes if needed
-  };
+  // Check Passport-based auth (OAuth)
+  if (req.isAuthenticated && req.isAuthenticated() && (req.user as any)?.id) {
+    req.session.userId = (req.user as any).id;
+    return next();
+  }
 
-  next();
+  return res.status(401).json({ error: 'Non autenticato' });
 }
 
 // Middleware to check if user is family admin

@@ -7,14 +7,16 @@ import { z } from 'zod';
 export const users = pgTable('users', {
   id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
-  password: text('password').notNull(), // bcrypt hashed
+  password: text('password'), // bcrypt hashed, nullable for OAuth-only users
   fullName: text('full_name'),
   profilePicture: text('profile_picture'),
+  authProvider: text('auth_provider').$type<'email' | 'google' | 'apple' | 'microsoft' | 'facebook'>().default('email'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
 export const usersRelations = relations(users, ({ one, many }) => ({
   familyMember: one(familyMembers),
+  oauthAccounts: many(oauthAccounts),
   categories: many(categories),
   expenses: many(expenses),
   personalBudgets: many(personalBudgets),
@@ -22,6 +24,30 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   notifications: many(notifications),
   revolutConnection: one(revolutConnections),
 }));
+
+// ============ OAUTH ACCOUNTS TABLE ============
+export const oauthAccounts = pgTable('oauth_accounts', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  provider: text('provider').notNull().$type<'google' | 'apple' | 'microsoft' | 'facebook'>(),
+  providerAccountId: text('provider_account_id').notNull(),
+  accessToken: text('access_token'),
+  refreshToken: text('refresh_token'),
+  expiresAt: timestamp('expires_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => ({
+  uniqueProviderAccount: unique().on(table.provider, table.providerAccountId),
+}));
+
+export const oauthAccountsRelations = relations(oauthAccounts, ({ one }) => ({
+  user: one(users, {
+    fields: [oauthAccounts.userId],
+    references: [users.id],
+  }),
+}));
+
+export const insertOauthAccountSchema = createInsertSchema(oauthAccounts);
+export const selectOauthAccountSchema = createSelectSchema(oauthAccounts);
 
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
@@ -335,3 +361,6 @@ export type InsertNotification = typeof notifications.$inferInsert;
 
 export type RevolutConnection = typeof revolutConnections.$inferSelect;
 export type InsertRevolutConnection = typeof revolutConnections.$inferInsert;
+
+export type OauthAccount = typeof oauthAccounts.$inferSelect;
+export type InsertOauthAccount = typeof oauthAccounts.$inferInsert;

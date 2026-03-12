@@ -3,6 +3,7 @@ import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import { neon } from '@neondatabase/serverless';
 import { PostgresStorage } from './storage';
+import { configurePassport } from './middleware/passport';
 
 // Import routes
 import { createAuthRoutes } from './routes/auth';
@@ -54,6 +55,11 @@ app.use(
     },
   })
 );
+
+// Passport initialization
+const passportInstance = configurePassport(storage);
+app.use(passportInstance.initialize());
+app.use(passportInstance.session());
 
 // Logging middleware
 app.use((req, res, next) => {

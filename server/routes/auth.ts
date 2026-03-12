@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
+import passport from 'passport';
 import { IStorage } from '../storage';
 import { hashPassword, comparePassword, isAuthenticated } from '../middleware/auth';
 
@@ -71,6 +72,13 @@ export function createAuthRoutes(storage: IStorage) {
         return res.status(401).json({ error: 'Email o password non corretti' });
       }
 
+      // Check if user has a password (OAuth-only users don't)
+      if (!user.password) {
+        return res.status(401).json({
+          error: `Questo account usa il login con ${user.authProvider}. Usa il pulsante corrispondente.`,
+        });
+      }
+
       // Verify password
       const isValid = await comparePassword(data.password, user.password);
       if (!isValid) {
@@ -137,6 +145,72 @@ export function createAuthRoutes(storage: IStorage) {
     } catch (error) {
       console.error('Get user error:', error);
       res.status(500).json({ error: 'Errore durante il recupero dell\'utente' });
+    }
+  });
+
+  // ========== OAUTH ROUTES ==========
+  const CLIENT_URL = process.env.CLIENT_URL || '/';
+
+  // Helper: handle successful OAuth login
+  function handleOAuthSuccess(req: any, res: any) {
+    const user = req.user;
+    if (user) {
+      // Store userId in session (same as email/password login)
+      req.session.userId = user.id;
+    }
+    res.redirect(CLIENT_URL);
+  }
+
+  function handleOAuthError(req: any, res: any) {
+    res.redirect(`${CLIENT_URL}?error=auth_failed`);
+  }
+
+  // --- Google ---
+  router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+  router.get(
+    '/google/callback',
+    passport.authenticate('google', { failureRedirect: `${CLIENT_URL}?error=google_auth_failed` }),
+    handleOAuthSuccess
+  );
+
+  // --- Facebook ---
+  router.get('/facebook', passport.authenticate('facebook', { scope: ['email'] }));
+  router.get(
+    '/facebook/callback',
+    passport.authenticate('facebook', { failureRedirect: `${CLIENT_URL}?error=facebook_auth_failed` }),
+    handleOAuthSuccess
+  );
+
+  // --- Microsoft ---
+  router.get('/microsoft', passport.authenticate('microsoft', { scope: ['user.read'] }));
+  router.get(
+    '/microsoft/callback',
+    passport.authenticate('microsoft', { failureRedirect: `${CLIENT_URL}?error=microsoft_auth_failed` }),
+    handleOAuthSuccess
+  );
+
+  // --- Apple ---
+  router.get('/apple', passport.authenticate('apple'));
+  router.post(
+    '/apple/callback',
+    passport.authenticate('apple', { failureRedirect: `${CLIENT_URL}?error=apple_auth_failed` }),
+    handleOAuthSuccess
+  );
+
+  // --- Get linked OAuth accounts for current user ---
+  router.get('/oauth-accounts', isAuthenticated, async (req, res) => {
+    try {
+      const accounts = await storage.getOauthAccountsByUser(req.session.userId!);
+      res.json(
+        accounts.map((a) => ({
+          id: a.id,
+          provider: a.provider,
+          createdAt: a.createdAt,
+        }))
+      );
+    } catch (error) {
+      console.error('Get OAuth accounts error:', error);
+      res.status(500).json({ error: 'Errore durante il recupero degli account OAuth' });
     }
   });
 

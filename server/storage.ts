@@ -15,6 +15,7 @@ import type {
   Invite, InsertInvite,
   Notification, InsertNotification,
   RevolutConnection, InsertRevolutConnection,
+  OauthAccount, InsertOauthAccount,
 } from '../db/schema';
 
 export interface IStorage {
@@ -95,6 +96,22 @@ export interface IStorage {
   createNotification(notification: Omit<InsertNotification, 'id'>): Promise<Notification>;
   markNotificationAsRead(id: string, userId: string): Promise<void>;
   deleteNotification(id: string, userId: string): Promise<void>;
+
+  // ========== OAUTH ACCOUNTS ==========
+  getOauthAccount(provider: string, providerAccountId: string): Promise<OauthAccount | undefined>;
+  getOauthAccountsByUser(userId: string): Promise<OauthAccount[]>;
+  createOauthAccount(account: Omit<InsertOauthAccount, 'id'>): Promise<OauthAccount>;
+  updateOauthAccount(id: string, account: Partial<InsertOauthAccount>): Promise<OauthAccount | undefined>;
+  findOrCreateOauthUser(profile: {
+    provider: 'google' | 'apple' | 'microsoft' | 'facebook';
+    providerAccountId: string;
+    email: string;
+    fullName?: string;
+    profilePicture?: string;
+    accessToken?: string;
+    refreshToken?: string;
+    expiresAt?: Date;
+  }): Promise<User>;
 
   // ========== REVOLUT ==========
   getRevolutConnection(userId: string): Promise<RevolutConnection | undefined>;
@@ -646,6 +663,109 @@ export class PostgresStorage implements IStorage {
           eq(schema.notifications.userId, userId)
         )
       );
+  }
+
+  // ========== OAUTH ACCOUNTS ==========
+  async getOauthAccount(provider: string, providerAccountId: string): Promise<OauthAccount | undefined> {
+    return await this.db.query.oauthAccounts.findFirst({
+      where: and(
+        eq(schema.oauthAccounts.provider, provider),
+        eq(schema.oauthAccounts.providerAccountId, providerAccountId)
+      ),
+    });
+  }
+
+  async getOauthAccountsByUser(userId: string): Promise<OauthAccount[]> {
+    return await this.db.query.oauthAccounts.findMany({
+      where: eq(schema.oauthAccounts.userId, userId),
+    });
+  }
+
+  async createOauthAccount(account: Omit<InsertOauthAccount, 'id'>): Promise<OauthAccount> {
+    const id = nanoid();
+    const [created] = await this.db
+      .insert(schema.oauthAccounts)
+      .values({ ...account, id })
+      .returning();
+    return created;
+  }
+
+  async updateOauthAccount(id: string, account: Partial<InsertOauthAccount>): Promise<OauthAccount | undefined> {
+    const [updated] = await this.db
+      .update(schema.oauthAccounts)
+      .set(account)
+      .where(eq(schema.oauthAccounts.id, id))
+      .returning();
+    return updated;
+  }
+
+  async findOrCreateOauthUser(profile: {
+    provider: 'google' | 'apple' | 'microsoft' | 'facebook';
+    providerAccountId: string;
+    email: string;
+    fullName?: string;
+    profilePicture?: string;
+    accessToken?: string;
+    refreshToken?: string;
+    expiresAt?: Date;
+  }): Promise<User> {
+    // Check if OAuth account already exists
+    const existingOauth = await this.getOauthAccount(profile.provider, profile.providerAccountId);
+
+    if (existingOauth) {
+      // Update tokens
+      await this.updateOauthAccount(existingOauth.id, {
+        accessToken: profile.accessToken,
+        refreshToken: profile.refreshToken,
+        expiresAt: profile.expiresAt,
+      });
+      const user = await this.getUser(existingOauth.userId);
+      return user!;
+    }
+
+    // Check if user with this email exists
+    const existingUser = await this.getUserByEmail(profile.email);
+
+    if (existingUser) {
+      // Link OAuth account to existing user
+      await this.createOauthAccount({
+        userId: existingUser.id,
+        provider: profile.provider,
+        providerAccountId: profile.providerAccountId,
+        accessToken: profile.accessToken,
+        refreshToken: profile.refreshToken,
+        expiresAt: profile.expiresAt,
+      });
+
+      // Update profile picture if not set
+      if (!existingUser.profilePicture && profile.profilePicture) {
+        await this.updateUser(existingUser.id, { profilePicture: profile.profilePicture });
+      }
+
+      return existingUser;
+    }
+
+    // Create new user + OAuth account
+    const userId = nanoid();
+    const user = await this.createUser({
+      id: userId,
+      email: profile.email,
+      password: null,
+      fullName: profile.fullName,
+      profilePicture: profile.profilePicture,
+      authProvider: profile.provider,
+    });
+
+    await this.createOauthAccount({
+      userId: user.id,
+      provider: profile.provider,
+      providerAccountId: profile.providerAccountId,
+      accessToken: profile.accessToken,
+      refreshToken: profile.refreshToken,
+      expiresAt: profile.expiresAt,
+    });
+
+    return user;
   }
 
   // ========== REVOLUT ==========
