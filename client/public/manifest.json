@@ -1,0 +1,29 @@
+{
+  "name": "Famiglia - Budget Familiare",
+  "short_name": "Famiglia",
+  "description": "Gestisci il budget familiare insieme alla tua famiglia",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAFAFA",
+  "theme_color": "#18181B",
+  "orientation": "portrait-primary",
+  "categories": ["finance", "lifestyle"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

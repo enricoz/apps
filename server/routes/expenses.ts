@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { IStorage } from '../storage';
 import { isAuthenticated } from '../middleware/auth';
-import { insertExpenseSchema } from '../db/schema';
+import { insertExpenseSchema } from '../../db/schema';
 
 const getExpensesQuerySchema = z.object({
   categoryId: z.string().optional(),

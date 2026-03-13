@@ -10,6 +10,9 @@ import { HomePage } from '@/pages/Home';
 import { AnalyticsPage } from '@/pages/Analytics';
 import { RevolutPage } from '@/pages/Revolut';
 import { ProfilePage } from '@/pages/Profile';
+import { IncomePage } from '@/pages/Income';
+import { BudgetPage } from '@/pages/Budget';
+import { SubscriptionPage } from '@/pages/Subscription';
 import { OnboardingPage } from '@/pages/Onboarding';
 
 interface AuthData {
@@ -28,9 +31,11 @@ function App() {
   if (isLoading) {
     return (
       <div className="app-container flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Caricamento...</p>
+        <div className="text-center animate-fade-in">
+          <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-4 shadow-lg shadow-primary/20">
+            <span className="text-xl font-bold text-primary-foreground">F</span>
+          </div>
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mt-4" />
         </div>
       </div>
     );
@@ -62,8 +67,11 @@ function App() {
       <div className="main-content">
         <Switch>
           <Route path="/" component={HomePage} />
+          <Route path="/income" component={IncomePage} />
+          <Route path="/budget" component={BudgetPage} />
           <Route path="/analytics" component={AnalyticsPage} />
           <Route path="/revolut" component={RevolutPage} />
+          <Route path="/subscription" component={SubscriptionPage} />
           <Route path="/profile" component={ProfilePage} />
           <Route>
             <div className="p-4 text-center">

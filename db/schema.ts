@@ -7,21 +7,48 @@ import { z } from 'zod';
 export const users = pgTable('users', {
   id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
-  password: text('password').notNull(), // bcrypt hashed
+  password: text('password'), // bcrypt hashed, nullable for OAuth-only users
   fullName: text('full_name'),
   profilePicture: text('profile_picture'),
+  authProvider: text('auth_provider').$type<'email' | 'google' | 'apple' | 'microsoft' | 'facebook'>().default('email'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
 export const usersRelations = relations(users, ({ one, many }) => ({
   familyMember: one(familyMembers),
+  oauthAccounts: many(oauthAccounts),
   categories: many(categories),
   expenses: many(expenses),
+  incomes: many(incomes),
   personalBudgets: many(personalBudgets),
   sentInvites: many(invites),
   notifications: many(notifications),
   revolutConnection: one(revolutConnections),
 }));
+
+// ============ OAUTH ACCOUNTS TABLE ============
+export const oauthAccounts = pgTable('oauth_accounts', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  provider: text('provider').notNull().$type<'google' | 'apple' | 'microsoft' | 'facebook'>(),
+  providerAccountId: text('provider_account_id').notNull(),
+  accessToken: text('access_token'),
+  refreshToken: text('refresh_token'),
+  expiresAt: timestamp('expires_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => ({
+  uniqueProviderAccount: unique().on(table.provider, table.providerAccountId),
+}));
+
+export const oauthAccountsRelations = relations(oauthAccounts, ({ one }) => ({
+  user: one(users, {
+    fields: [oauthAccounts.userId],
+    references: [users.id],
+  }),
+}));
+
+export const insertOauthAccountSchema = createInsertSchema(oauthAccounts);
+export const selectOauthAccountSchema = createSelectSchema(oauthAccounts);
 
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
@@ -44,7 +71,9 @@ export const familiesRelations = relations(families, ({ one, many }) => ({
   budgets: many(budgets),
   familyBudgets: many(familyBudgets),
   expenses: many(expenses),
+  incomes: many(incomes),
   invites: many(invites),
+  account: one(familyAccounts),
 }));
 
 export const insertFamilySchema = createInsertSchema(families);
@@ -197,6 +226,38 @@ export const insertPersonalBudgetSchema = createInsertSchema(personalBudgets, {
 
 export const selectPersonalBudgetSchema = createSelectSchema(personalBudgets);
 
+// ============ YEARLY BUDGETS TABLE (cap annuale per categoria) ============
+export const yearlyBudgets = pgTable('yearly_budgets', {
+  id: text('id').primaryKey(),
+  familyId: text('family_id').notNull().references(() => families.id, { onDelete: 'cascade' }),
+  categoryId: text('category_id').notNull().references(() => categories.id, { onDelete: 'cascade' }),
+  yearlyAmount: text('yearly_amount').notNull(), // max annual spend
+  year: integer('year').notNull(),
+  alertThreshold: integer('alert_threshold').notNull().default(80), // percentage to trigger warning
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => ({
+  uniqueCategoryYear: unique().on(table.categoryId, table.year),
+}));
+
+export const yearlyBudgetsRelations = relations(yearlyBudgets, ({ one }) => ({
+  family: one(families, {
+    fields: [yearlyBudgets.familyId],
+    references: [families.id],
+  }),
+  category: one(categories, {
+    fields: [yearlyBudgets.categoryId],
+    references: [categories.id],
+  }),
+}));
+
+export const insertYearlyBudgetSchema = createInsertSchema(yearlyBudgets, {
+  yearlyAmount: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Importo non valido'),
+  year: z.number().int().min(2020),
+  alertThreshold: z.number().int().min(1).max(100).default(80),
+});
+
+export const selectYearlyBudgetSchema = createSelectSchema(yearlyBudgets);
+
 // ============ EXPENSES TABLE ============
 export const expenses = pgTable('expenses', {
   id: text('id').primaryKey(),
@@ -281,6 +342,60 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
 export const insertNotificationSchema = createInsertSchema(notifications);
 export const selectNotificationSchema = createSelectSchema(notifications);
 
+// ============ INCOMES TABLE ============
+export const incomes = pgTable('incomes', {
+  id: text('id').primaryKey(),
+  familyId: text('family_id').notNull().references(() => families.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  amount: text('amount').notNull(), // numeric string for precision
+  description: text('description').notNull(),
+  source: text('source').notNull().$type<'manual' | 'revolut'>().default('manual'),
+  isRecurring: boolean('is_recurring').notNull().default(false),
+  recurringDay: integer('recurring_day'), // 1-31, day of month for recurring incomes
+  date: timestamp('date').notNull().defaultNow(),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const incomesRelations = relations(incomes, ({ one }) => ({
+  family: one(families, {
+    fields: [incomes.familyId],
+    references: [families.id],
+  }),
+  user: one(users, {
+    fields: [incomes.userId],
+    references: [users.id],
+  }),
+}));
+
+export const insertIncomeSchema = createInsertSchema(incomes, {
+  amount: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Importo non valido'),
+  description: z.string().min(1, 'Descrizione richiesta'),
+  date: z.date().or(z.string()),
+  recurringDay: z.number().int().min(1).max(31).optional(),
+});
+
+export const selectIncomeSchema = createSelectSchema(incomes);
+
+// ============ FAMILY ACCOUNTS TABLE ============
+export const familyAccounts = pgTable('family_accounts', {
+  id: text('id').primaryKey(),
+  familyId: text('family_id').notNull().references(() => families.id, { onDelete: 'cascade' }).unique(),
+  accountType: text('account_type').notNull().$type<'shared' | 'separate' | 'mixed'>().default('shared'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const familyAccountsRelations = relations(familyAccounts, ({ one }) => ({
+  family: one(families, {
+    fields: [familyAccounts.familyId],
+    references: [families.id],
+  }),
+}));
+
+export const insertFamilyAccountSchema = createInsertSchema(familyAccounts);
+export const selectFamilyAccountSchema = createSelectSchema(familyAccounts);
+
 // ============ REVOLUT CONNECTIONS TABLE ============
 export const revolutConnections = pgTable('revolut_connections', {
   id: text('id').primaryKey(),
@@ -301,6 +416,33 @@ export const revolutConnectionsRelations = relations(revolutConnections, ({ one 
 
 export const insertRevolutConnectionSchema = createInsertSchema(revolutConnections);
 export const selectRevolutConnectionSchema = createSelectSchema(revolutConnections);
+
+// ============ SUBSCRIPTIONS TABLE ============
+export const subscriptions = pgTable('subscriptions', {
+  id: text('id').primaryKey(),
+  familyId: text('family_id').notNull().references(() => families.id, { onDelete: 'cascade' }).unique(),
+  stripeCustomerId: text('stripe_customer_id').notNull(),
+  stripeSubscriptionId: text('stripe_subscription_id'),
+  stripePriceId: text('stripe_price_id'),
+  status: text('status').notNull().$type<'active' | 'canceled' | 'past_due' | 'trialing' | 'incomplete' | 'unpaid'>().default('incomplete'),
+  plan: text('plan').notNull().$type<'free' | 'base' | 'premium'>().default('free'),
+  currentPeriodStart: timestamp('current_period_start'),
+  currentPeriodEnd: timestamp('current_period_end'),
+  cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
+  trialEnd: timestamp('trial_end'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
+  family: one(families, {
+    fields: [subscriptions.familyId],
+    references: [families.id],
+  }),
+}));
+
+export const insertSubscriptionSchema = createInsertSchema(subscriptions);
+export const selectSubscriptionSchema = createSelectSchema(subscriptions);
 
 // ============ TYPES ============
 export type User = typeof users.$inferSelect;
@@ -335,3 +477,18 @@ export type InsertNotification = typeof notifications.$inferInsert;
 
 export type RevolutConnection = typeof revolutConnections.$inferSelect;
 export type InsertRevolutConnection = typeof revolutConnections.$inferInsert;
+
+export type OauthAccount = typeof oauthAccounts.$inferSelect;
+export type InsertOauthAccount = typeof oauthAccounts.$inferInsert;
+
+export type Income = typeof incomes.$inferSelect;
+export type InsertIncome = typeof incomes.$inferInsert;
+
+export type FamilyAccount = typeof familyAccounts.$inferSelect;
+export type InsertFamilyAccount = typeof familyAccounts.$inferInsert;
+
+export type YearlyBudget = typeof yearlyBudgets.$inferSelect;
+export type InsertYearlyBudget = typeof yearlyBudgets.$inferInsert;
+
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = typeof subscriptions.$inferInsert;

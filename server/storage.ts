@@ -15,6 +15,11 @@ import type {
   Invite, InsertInvite,
   Notification, InsertNotification,
   RevolutConnection, InsertRevolutConnection,
+  OauthAccount, InsertOauthAccount,
+  Income, InsertIncome,
+  FamilyAccount, InsertFamilyAccount,
+  YearlyBudget, InsertYearlyBudget,
+  Subscription, InsertSubscription,
 } from '../db/schema';
 
 export interface IStorage {
@@ -57,6 +62,13 @@ export interface IStorage {
   getPersonalBudget(userId: string, month: number, year: number): Promise<PersonalBudget | undefined>;
   upsertPersonalBudget(budget: Omit<InsertPersonalBudget, 'id'>): Promise<PersonalBudget>;
 
+  // ========== YEARLY BUDGETS ==========
+  getYearlyBudgets(familyId: string, year: number): Promise<YearlyBudget[]>;
+  getYearlyBudget(categoryId: string, year: number): Promise<YearlyBudget | undefined>;
+  upsertYearlyBudget(budget: Omit<InsertYearlyBudget, 'id'>): Promise<YearlyBudget>;
+  deleteYearlyBudget(id: string): Promise<void>;
+  getYearlyCategorySpending(familyId: string, categoryId: string, year: number): Promise<string>;
+
   // ========== EXPENSES ==========
   // CRITICAL: Filter by userId for private category expenses
   getExpenses(familyId: string, userId: string, filters?: {
@@ -81,7 +93,15 @@ export interface IStorage {
 
   getTotalSpending(familyId: string, userId: string, month: number, year: number): Promise<string>;
 
+  getCategorySpending(familyId: string, categoryId: string, month: number, year: number): Promise<string>;
+
   getPersonalSpending(userId: string, month: number, year: number): Promise<string>;
+
+  getMonthlyTrend(familyId: string, userId: string, months: number): Promise<Array<{
+    month: number;
+    year: number;
+    total: string;
+  }>>;
 
   // ========== INVITES ==========
   getInvite(token: string): Promise<Invite | undefined>;
@@ -96,10 +116,50 @@ export interface IStorage {
   markNotificationAsRead(id: string, userId: string): Promise<void>;
   deleteNotification(id: string, userId: string): Promise<void>;
 
+  // ========== INCOMES ==========
+  getIncomes(familyId: string, filters?: {
+    userId?: string;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<Income[]>;
+  getIncome(id: string): Promise<Income | undefined>;
+  createIncome(income: Omit<InsertIncome, 'id'>): Promise<Income>;
+  updateIncome(id: string, income: Partial<InsertIncome>): Promise<Income | undefined>;
+  deleteIncome(id: string): Promise<void>;
+  getTotalIncome(familyId: string, month: number, year: number): Promise<string>;
+  getRecurringIncomes(familyId: string): Promise<Income[]>;
+
+  // ========== FAMILY ACCOUNTS ==========
+  getFamilyAccount(familyId: string): Promise<FamilyAccount | undefined>;
+  upsertFamilyAccount(account: Omit<InsertFamilyAccount, 'id'>): Promise<FamilyAccount>;
+
+  // ========== OAUTH ACCOUNTS ==========
+  getOauthAccount(provider: string, providerAccountId: string): Promise<OauthAccount | undefined>;
+  getOauthAccountsByUser(userId: string): Promise<OauthAccount[]>;
+  createOauthAccount(account: Omit<InsertOauthAccount, 'id'>): Promise<OauthAccount>;
+  updateOauthAccount(id: string, account: Partial<InsertOauthAccount>): Promise<OauthAccount | undefined>;
+  findOrCreateOauthUser(profile: {
+    provider: 'google' | 'apple' | 'microsoft' | 'facebook';
+    providerAccountId: string;
+    email: string;
+    fullName?: string;
+    profilePicture?: string;
+    accessToken?: string;
+    refreshToken?: string;
+    expiresAt?: Date;
+  }): Promise<User>;
+
   // ========== REVOLUT ==========
   getRevolutConnection(userId: string): Promise<RevolutConnection | undefined>;
   upsertRevolutConnection(connection: Omit<InsertRevolutConnection, 'id'>): Promise<RevolutConnection>;
   deleteRevolutConnection(userId: string): Promise<void>;
+
+  // ========== SUBSCRIPTIONS ==========
+  getSubscription(familyId: string): Promise<Subscription | undefined>;
+  getSubscriptionByStripeCustomerId(customerId: string): Promise<Subscription | undefined>;
+  getSubscriptionByStripeSubscriptionId(subscriptionId: string): Promise<Subscription | undefined>;
+  upsertSubscription(subscription: Omit<InsertSubscription, 'id'>): Promise<Subscription>;
+  updateSubscriptionStatus(stripeSubscriptionId: string, updates: Partial<InsertSubscription>): Promise<Subscription | undefined>;
 }
 
 export class PostgresStorage implements IStorage {
@@ -544,6 +604,27 @@ export class PostgresStorage implements IStorage {
     return result[0]?.total || '0';
   }
 
+  async getCategorySpending(familyId: string, categoryId: string, month: number, year: number): Promise<string> {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59);
+
+    const result = await this.db
+      .select({
+        total: sql<string>`COALESCE(SUM(CAST(${schema.expenses.amount} AS NUMERIC)), 0)::text`,
+      })
+      .from(schema.expenses)
+      .where(
+        and(
+          eq(schema.expenses.familyId, familyId),
+          eq(schema.expenses.categoryId, categoryId),
+          gte(schema.expenses.date, startDate),
+          lte(schema.expenses.date, endDate)
+        )
+      );
+
+    return result[0]?.total || '0';
+  }
+
   async getPersonalSpending(userId: string, month: number, year: number): Promise<string> {
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0, 23, 59, 59);
@@ -562,6 +643,25 @@ export class PostgresStorage implements IStorage {
       );
 
     return result[0]?.total || '0';
+  }
+
+  async getMonthlyTrend(familyId: string, userId: string, months: number): Promise<Array<{
+    month: number;
+    year: number;
+    total: string;
+  }>> {
+    const results: Array<{ month: number; year: number; total: string }> = [];
+    const now = new Date();
+
+    for (let i = months - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const m = d.getMonth() + 1;
+      const y = d.getFullYear();
+      const total = await this.getTotalSpending(familyId, userId, m, y);
+      results.push({ month: m, year: y, total });
+    }
+
+    return results;
   }
 
   // ========== INVITES ==========
@@ -648,6 +748,284 @@ export class PostgresStorage implements IStorage {
       );
   }
 
+  // ========== YEARLY BUDGETS ==========
+  async getYearlyBudgets(familyId: string, year: number): Promise<YearlyBudget[]> {
+    return await this.db.query.yearlyBudgets.findMany({
+      where: and(
+        eq(schema.yearlyBudgets.familyId, familyId),
+        eq(schema.yearlyBudgets.year, year)
+      ),
+      with: { category: true },
+    });
+  }
+
+  async getYearlyBudget(categoryId: string, year: number): Promise<YearlyBudget | undefined> {
+    return await this.db.query.yearlyBudgets.findFirst({
+      where: and(
+        eq(schema.yearlyBudgets.categoryId, categoryId),
+        eq(schema.yearlyBudgets.year, year)
+      ),
+    });
+  }
+
+  async upsertYearlyBudget(budget: Omit<InsertYearlyBudget, 'id'>): Promise<YearlyBudget> {
+    const existing = await this.getYearlyBudget(budget.categoryId, budget.year);
+
+    if (existing) {
+      const [updated] = await this.db
+        .update(schema.yearlyBudgets)
+        .set({ yearlyAmount: budget.yearlyAmount, alertThreshold: budget.alertThreshold })
+        .where(eq(schema.yearlyBudgets.id, existing.id))
+        .returning();
+      return updated;
+    }
+
+    const id = nanoid();
+    const [created] = await this.db
+      .insert(schema.yearlyBudgets)
+      .values({ ...budget, id })
+      .returning();
+    return created;
+  }
+
+  async deleteYearlyBudget(id: string): Promise<void> {
+    await this.db.delete(schema.yearlyBudgets).where(eq(schema.yearlyBudgets.id, id));
+  }
+
+  async getYearlyCategorySpending(familyId: string, categoryId: string, year: number): Promise<string> {
+    const startDate = new Date(year, 0, 1);
+    const endDate = new Date(year, 11, 31, 23, 59, 59);
+
+    const result = await this.db
+      .select({
+        total: sql<string>`COALESCE(SUM(CAST(${schema.expenses.amount} AS NUMERIC)), 0)::text`,
+      })
+      .from(schema.expenses)
+      .where(
+        and(
+          eq(schema.expenses.familyId, familyId),
+          eq(schema.expenses.categoryId, categoryId),
+          gte(schema.expenses.date, startDate),
+          lte(schema.expenses.date, endDate)
+        )
+      );
+
+    return result[0]?.total || '0';
+  }
+
+  // ========== INCOMES ==========
+  async getIncomes(familyId: string, filters?: {
+    userId?: string;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<Income[]> {
+    const conditions = [eq(schema.incomes.familyId, familyId)];
+
+    if (filters?.userId) {
+      conditions.push(eq(schema.incomes.userId, filters.userId));
+    }
+    if (filters?.startDate) {
+      conditions.push(gte(schema.incomes.date, filters.startDate));
+    }
+    if (filters?.endDate) {
+      conditions.push(lte(schema.incomes.date, filters.endDate));
+    }
+
+    return await this.db.query.incomes.findMany({
+      where: and(...conditions),
+      with: { user: true },
+      orderBy: [desc(schema.incomes.date)],
+    });
+  }
+
+  async getIncome(id: string): Promise<Income | undefined> {
+    return await this.db.query.incomes.findFirst({
+      where: eq(schema.incomes.id, id),
+    });
+  }
+
+  async createIncome(income: Omit<InsertIncome, 'id'>): Promise<Income> {
+    const id = nanoid();
+    const [created] = await this.db
+      .insert(schema.incomes)
+      .values({ ...income, id })
+      .returning();
+    return created;
+  }
+
+  async updateIncome(id: string, income: Partial<InsertIncome>): Promise<Income | undefined> {
+    const [updated] = await this.db
+      .update(schema.incomes)
+      .set(income)
+      .where(eq(schema.incomes.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteIncome(id: string): Promise<void> {
+    await this.db.delete(schema.incomes).where(eq(schema.incomes.id, id));
+  }
+
+  async getTotalIncome(familyId: string, month: number, year: number): Promise<string> {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59);
+
+    const result = await this.db
+      .select({
+        total: sql<string>`COALESCE(SUM(CAST(${schema.incomes.amount} AS NUMERIC)), 0)::text`,
+      })
+      .from(schema.incomes)
+      .where(
+        and(
+          eq(schema.incomes.familyId, familyId),
+          gte(schema.incomes.date, startDate),
+          lte(schema.incomes.date, endDate)
+        )
+      );
+
+    return result[0]?.total || '0';
+  }
+
+  async getRecurringIncomes(familyId: string): Promise<Income[]> {
+    return await this.db.query.incomes.findMany({
+      where: and(
+        eq(schema.incomes.familyId, familyId),
+        eq(schema.incomes.isRecurring, true)
+      ),
+      with: { user: true },
+    });
+  }
+
+  // ========== FAMILY ACCOUNTS ==========
+  async getFamilyAccount(familyId: string): Promise<FamilyAccount | undefined> {
+    return await this.db.query.familyAccounts.findFirst({
+      where: eq(schema.familyAccounts.familyId, familyId),
+    });
+  }
+
+  async upsertFamilyAccount(account: Omit<InsertFamilyAccount, 'id'>): Promise<FamilyAccount> {
+    const existing = await this.getFamilyAccount(account.familyId);
+
+    if (existing) {
+      const [updated] = await this.db
+        .update(schema.familyAccounts)
+        .set({ accountType: account.accountType, updatedAt: new Date() })
+        .where(eq(schema.familyAccounts.id, existing.id))
+        .returning();
+      return updated;
+    }
+
+    const id = nanoid();
+    const [created] = await this.db
+      .insert(schema.familyAccounts)
+      .values({ ...account, id })
+      .returning();
+    return created;
+  }
+
+  // ========== OAUTH ACCOUNTS ==========
+  async getOauthAccount(provider: string, providerAccountId: string): Promise<OauthAccount | undefined> {
+    return await this.db.query.oauthAccounts.findFirst({
+      where: and(
+        eq(schema.oauthAccounts.provider, provider),
+        eq(schema.oauthAccounts.providerAccountId, providerAccountId)
+      ),
+    });
+  }
+
+  async getOauthAccountsByUser(userId: string): Promise<OauthAccount[]> {
+    return await this.db.query.oauthAccounts.findMany({
+      where: eq(schema.oauthAccounts.userId, userId),
+    });
+  }
+
+  async createOauthAccount(account: Omit<InsertOauthAccount, 'id'>): Promise<OauthAccount> {
+    const id = nanoid();
+    const [created] = await this.db
+      .insert(schema.oauthAccounts)
+      .values({ ...account, id })
+      .returning();
+    return created;
+  }
+
+  async updateOauthAccount(id: string, account: Partial<InsertOauthAccount>): Promise<OauthAccount | undefined> {
+    const [updated] = await this.db
+      .update(schema.oauthAccounts)
+      .set(account)
+      .where(eq(schema.oauthAccounts.id, id))
+      .returning();
+    return updated;
+  }
+
+  async findOrCreateOauthUser(profile: {
+    provider: 'google' | 'apple' | 'microsoft' | 'facebook';
+    providerAccountId: string;
+    email: string;
+    fullName?: string;
+    profilePicture?: string;
+    accessToken?: string;
+    refreshToken?: string;
+    expiresAt?: Date;
+  }): Promise<User> {
+    // Check if OAuth account already exists
+    const existingOauth = await this.getOauthAccount(profile.provider, profile.providerAccountId);
+
+    if (existingOauth) {
+      // Update tokens
+      await this.updateOauthAccount(existingOauth.id, {
+        accessToken: profile.accessToken,
+        refreshToken: profile.refreshToken,
+        expiresAt: profile.expiresAt,
+      });
+      const user = await this.getUser(existingOauth.userId);
+      return user!;
+    }
+
+    // Check if user with this email exists
+    const existingUser = await this.getUserByEmail(profile.email);
+
+    if (existingUser) {
+      // Link OAuth account to existing user
+      await this.createOauthAccount({
+        userId: existingUser.id,
+        provider: profile.provider,
+        providerAccountId: profile.providerAccountId,
+        accessToken: profile.accessToken,
+        refreshToken: profile.refreshToken,
+        expiresAt: profile.expiresAt,
+      });
+
+      // Update profile picture if not set
+      if (!existingUser.profilePicture && profile.profilePicture) {
+        await this.updateUser(existingUser.id, { profilePicture: profile.profilePicture });
+      }
+
+      return existingUser;
+    }
+
+    // Create new user + OAuth account
+    const userId = nanoid();
+    const user = await this.createUser({
+      id: userId,
+      email: profile.email,
+      password: null,
+      fullName: profile.fullName,
+      profilePicture: profile.profilePicture,
+      authProvider: profile.provider,
+    });
+
+    await this.createOauthAccount({
+      userId: user.id,
+      provider: profile.provider,
+      providerAccountId: profile.providerAccountId,
+      accessToken: profile.accessToken,
+      refreshToken: profile.refreshToken,
+      expiresAt: profile.expiresAt,
+    });
+
+    return user;
+  }
+
   // ========== REVOLUT ==========
   async getRevolutConnection(userId: string): Promise<RevolutConnection | undefined> {
     return await this.db.query.revolutConnections.findFirst({
@@ -679,5 +1057,50 @@ export class PostgresStorage implements IStorage {
     await this.db
       .delete(schema.revolutConnections)
       .where(eq(schema.revolutConnections.userId, userId));
+  }
+
+  // ========== SUBSCRIPTIONS ==========
+  async getSubscription(familyId: string): Promise<Subscription | undefined> {
+    return await this.db.query.subscriptions.findFirst({
+      where: eq(schema.subscriptions.familyId, familyId),
+    });
+  }
+
+  async getSubscriptionByStripeCustomerId(customerId: string): Promise<Subscription | undefined> {
+    return await this.db.query.subscriptions.findFirst({
+      where: eq(schema.subscriptions.stripeCustomerId, customerId),
+    });
+  }
+
+  async getSubscriptionByStripeSubscriptionId(subscriptionId: string): Promise<Subscription | undefined> {
+    return await this.db.query.subscriptions.findFirst({
+      where: eq(schema.subscriptions.stripeSubscriptionId, subscriptionId),
+    });
+  }
+
+  async upsertSubscription(subscription: Omit<InsertSubscription, 'id'>): Promise<Subscription> {
+    const existing = await this.getSubscription(subscription.familyId);
+    if (existing) {
+      const [updated] = await this.db
+        .update(schema.subscriptions)
+        .set({ ...subscription, updatedAt: new Date() })
+        .where(eq(schema.subscriptions.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await this.db
+      .insert(schema.subscriptions)
+      .values({ ...subscription, id: nanoid() })
+      .returning();
+    return created;
+  }
+
+  async updateSubscriptionStatus(stripeSubscriptionId: string, updates: Partial<InsertSubscription>): Promise<Subscription | undefined> {
+    const [updated] = await this.db
+      .update(schema.subscriptions)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.subscriptions.stripeSubscriptionId, stripeSubscriptionId))
+      .returning();
+    return updated;
   }
 }

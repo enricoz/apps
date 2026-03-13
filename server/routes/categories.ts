@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { IStorage } from '../storage';
 import { isAuthenticated } from '../middleware/auth';
-import { insertCategorySchema } from '../db/schema';
+import { insertCategorySchema } from '../../db/schema';
 
 export function createCategoryRoutes(storage: IStorage) {
   const router = Router();
