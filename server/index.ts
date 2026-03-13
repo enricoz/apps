@@ -15,6 +15,8 @@ import { createInviteRoutes } from './routes/invites';
 import { createNotificationRoutes } from './routes/notifications';
 import { createRevolutRoutes } from './routes/revolut';
 import { createAnalyticsRoutes } from './routes/analytics';
+import { createIncomeRoutes } from './routes/incomes';
+import { createAccountRoutes } from './routes/accounts';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -85,6 +87,8 @@ app.use('/api/invites', createInviteRoutes(storage));
 app.use('/api/notifications', createNotificationRoutes(storage));
 app.use('/api/revolut', createRevolutRoutes(storage));
 app.use('/api/analytics', createAnalyticsRoutes(storage));
+app.use('/api/incomes', createIncomeRoutes(storage));
+app.use('/api/accounts', createAccountRoutes(storage));
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

@@ -19,6 +19,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   oauthAccounts: many(oauthAccounts),
   categories: many(categories),
   expenses: many(expenses),
+  incomes: many(incomes),
   personalBudgets: many(personalBudgets),
   sentInvites: many(invites),
   notifications: many(notifications),
@@ -70,7 +71,9 @@ export const familiesRelations = relations(families, ({ one, many }) => ({
   budgets: many(budgets),
   familyBudgets: many(familyBudgets),
   expenses: many(expenses),
+  incomes: many(incomes),
   invites: many(invites),
+  account: one(familyAccounts),
 }));
 
 export const insertFamilySchema = createInsertSchema(families);
@@ -307,6 +310,60 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
 export const insertNotificationSchema = createInsertSchema(notifications);
 export const selectNotificationSchema = createSelectSchema(notifications);
 
+// ============ INCOMES TABLE ============
+export const incomes = pgTable('incomes', {
+  id: text('id').primaryKey(),
+  familyId: text('family_id').notNull().references(() => families.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  amount: text('amount').notNull(), // numeric string for precision
+  description: text('description').notNull(),
+  source: text('source').notNull().$type<'manual' | 'revolut'>().default('manual'),
+  isRecurring: boolean('is_recurring').notNull().default(false),
+  recurringDay: integer('recurring_day'), // 1-31, day of month for recurring incomes
+  date: timestamp('date').notNull().defaultNow(),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const incomesRelations = relations(incomes, ({ one }) => ({
+  family: one(families, {
+    fields: [incomes.familyId],
+    references: [families.id],
+  }),
+  user: one(users, {
+    fields: [incomes.userId],
+    references: [users.id],
+  }),
+}));
+
+export const insertIncomeSchema = createInsertSchema(incomes, {
+  amount: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Importo non valido'),
+  description: z.string().min(1, 'Descrizione richiesta'),
+  date: z.date().or(z.string()),
+  recurringDay: z.number().int().min(1).max(31).optional(),
+});
+
+export const selectIncomeSchema = createSelectSchema(incomes);
+
+// ============ FAMILY ACCOUNTS TABLE ============
+export const familyAccounts = pgTable('family_accounts', {
+  id: text('id').primaryKey(),
+  familyId: text('family_id').notNull().references(() => families.id, { onDelete: 'cascade' }).unique(),
+  accountType: text('account_type').notNull().$type<'shared' | 'separate' | 'mixed'>().default('shared'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const familyAccountsRelations = relations(familyAccounts, ({ one }) => ({
+  family: one(families, {
+    fields: [familyAccounts.familyId],
+    references: [families.id],
+  }),
+}));
+
+export const insertFamilyAccountSchema = createInsertSchema(familyAccounts);
+export const selectFamilyAccountSchema = createSelectSchema(familyAccounts);
+
 // ============ REVOLUT CONNECTIONS TABLE ============
 export const revolutConnections = pgTable('revolut_connections', {
   id: text('id').primaryKey(),
@@ -364,3 +421,9 @@ export type InsertRevolutConnection = typeof revolutConnections.$inferInsert;
 
 export type OauthAccount = typeof oauthAccounts.$inferSelect;
 export type InsertOauthAccount = typeof oauthAccounts.$inferInsert;
+
+export type Income = typeof incomes.$inferSelect;
+export type InsertIncome = typeof incomes.$inferInsert;
+
+export type FamilyAccount = typeof familyAccounts.$inferSelect;
+export type InsertFamilyAccount = typeof familyAccounts.$inferInsert;

@@ -21,6 +21,11 @@ export function HomePage() {
     queryFn: () => apiRequest(`/api/analytics/total-spending?month=${month}&year=${year}`),
   });
 
+  const { data: balance } = useQuery({
+    queryKey: ['/api/accounts/balance', month, year],
+    queryFn: () => apiRequest(`/api/accounts/balance?month=${month}&year=${year}`),
+  });
+
   const { data: expenses } = useQuery({
     queryKey: ['/api/expenses'],
     queryFn: () => apiRequest('/api/expenses'),
@@ -28,6 +33,7 @@ export function HomePage() {
 
   const budgetTotal = familyBudget?.totalAmount ? parseFloat(familyBudget.totalAmount) : 0;
   const spent = totalSpending?.total ? parseFloat(totalSpending.total) : 0;
+  const totalIncome = balance?.income ? parseFloat(balance.income) : 0;
   const remaining = budgetTotal - spent;
   const percentage = budgetTotal > 0 ? (spent / budgetTotal) * 100 : 0;
 
@@ -80,7 +86,7 @@ export function HomePage() {
               </div>
               <span className="text-xs text-muted-foreground">Entrate</span>
             </div>
-            <p className="font-mono font-semibold text-lg">{formatCurrency(budgetTotal)}</p>
+            <p className="font-mono font-semibold text-lg">{formatCurrency(totalIncome)}</p>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">

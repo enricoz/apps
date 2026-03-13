@@ -1,9 +1,10 @@
 import { Link, useLocation } from 'wouter';
-import { Home, PieChart, CreditCard, User } from 'lucide-react';
+import { Home, TrendingUp, PieChart, CreditCard, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { path: '/', label: 'Home', icon: Home },
+  { path: '/income', label: 'Entrate', icon: TrendingUp },
   { path: '/analytics', label: 'Analisi', icon: PieChart },
   { path: '/revolut', label: 'Banca', icon: CreditCard },
   { path: '/profile', label: 'Profilo', icon: User },
@@ -23,7 +24,7 @@ export function BottomNav() {
             <Link key={item.path} href={item.path}>
               <a
                 className={cn(
-                  'flex flex-col items-center justify-center w-16 h-full gap-0.5 relative',
+                  'flex flex-col items-center justify-center w-14 h-full gap-0.5 relative',
                   'active:scale-95 transition-all duration-200',
                   isActive
                     ? 'text-primary'

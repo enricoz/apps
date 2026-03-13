@@ -16,6 +16,8 @@ import type {
   Notification, InsertNotification,
   RevolutConnection, InsertRevolutConnection,
   OauthAccount, InsertOauthAccount,
+  Income, InsertIncome,
+  FamilyAccount, InsertFamilyAccount,
 } from '../db/schema';
 
 export interface IStorage {
@@ -96,6 +98,23 @@ export interface IStorage {
   createNotification(notification: Omit<InsertNotification, 'id'>): Promise<Notification>;
   markNotificationAsRead(id: string, userId: string): Promise<void>;
   deleteNotification(id: string, userId: string): Promise<void>;
+
+  // ========== INCOMES ==========
+  getIncomes(familyId: string, filters?: {
+    userId?: string;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<Income[]>;
+  getIncome(id: string): Promise<Income | undefined>;
+  createIncome(income: Omit<InsertIncome, 'id'>): Promise<Income>;
+  updateIncome(id: string, income: Partial<InsertIncome>): Promise<Income | undefined>;
+  deleteIncome(id: string): Promise<void>;
+  getTotalIncome(familyId: string, month: number, year: number): Promise<string>;
+  getRecurringIncomes(familyId: string): Promise<Income[]>;
+
+  // ========== FAMILY ACCOUNTS ==========
+  getFamilyAccount(familyId: string): Promise<FamilyAccount | undefined>;
+  upsertFamilyAccount(account: Omit<InsertFamilyAccount, 'id'>): Promise<FamilyAccount>;
 
   // ========== OAUTH ACCOUNTS ==========
   getOauthAccount(provider: string, providerAccountId: string): Promise<OauthAccount | undefined>;
@@ -663,6 +682,116 @@ export class PostgresStorage implements IStorage {
           eq(schema.notifications.userId, userId)
         )
       );
+  }
+
+  // ========== INCOMES ==========
+  async getIncomes(familyId: string, filters?: {
+    userId?: string;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<Income[]> {
+    const conditions = [eq(schema.incomes.familyId, familyId)];
+
+    if (filters?.userId) {
+      conditions.push(eq(schema.incomes.userId, filters.userId));
+    }
+    if (filters?.startDate) {
+      conditions.push(gte(schema.incomes.date, filters.startDate));
+    }
+    if (filters?.endDate) {
+      conditions.push(lte(schema.incomes.date, filters.endDate));
+    }
+
+    return await this.db.query.incomes.findMany({
+      where: and(...conditions),
+      with: { user: true },
+      orderBy: [desc(schema.incomes.date)],
+    });
+  }
+
+  async getIncome(id: string): Promise<Income | undefined> {
+    return await this.db.query.incomes.findFirst({
+      where: eq(schema.incomes.id, id),
+    });
+  }
+
+  async createIncome(income: Omit<InsertIncome, 'id'>): Promise<Income> {
+    const id = nanoid();
+    const [created] = await this.db
+      .insert(schema.incomes)
+      .values({ ...income, id })
+      .returning();
+    return created;
+  }
+
+  async updateIncome(id: string, income: Partial<InsertIncome>): Promise<Income | undefined> {
+    const [updated] = await this.db
+      .update(schema.incomes)
+      .set(income)
+      .where(eq(schema.incomes.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteIncome(id: string): Promise<void> {
+    await this.db.delete(schema.incomes).where(eq(schema.incomes.id, id));
+  }
+
+  async getTotalIncome(familyId: string, month: number, year: number): Promise<string> {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59);
+
+    const result = await this.db
+      .select({
+        total: sql<string>`COALESCE(SUM(CAST(${schema.incomes.amount} AS NUMERIC)), 0)::text`,
+      })
+      .from(schema.incomes)
+      .where(
+        and(
+          eq(schema.incomes.familyId, familyId),
+          gte(schema.incomes.date, startDate),
+          lte(schema.incomes.date, endDate)
+        )
+      );
+
+    return result[0]?.total || '0';
+  }
+
+  async getRecurringIncomes(familyId: string): Promise<Income[]> {
+    return await this.db.query.incomes.findMany({
+      where: and(
+        eq(schema.incomes.familyId, familyId),
+        eq(schema.incomes.isRecurring, true)
+      ),
+      with: { user: true },
+    });
+  }
+
+  // ========== FAMILY ACCOUNTS ==========
+  async getFamilyAccount(familyId: string): Promise<FamilyAccount | undefined> {
+    return await this.db.query.familyAccounts.findFirst({
+      where: eq(schema.familyAccounts.familyId, familyId),
+    });
+  }
+
+  async upsertFamilyAccount(account: Omit<InsertFamilyAccount, 'id'>): Promise<FamilyAccount> {
+    const existing = await this.getFamilyAccount(account.familyId);
+
+    if (existing) {
+      const [updated] = await this.db
+        .update(schema.familyAccounts)
+        .set({ accountType: account.accountType, updatedAt: new Date() })
+        .where(eq(schema.familyAccounts.id, existing.id))
+        .returning();
+      return updated;
+    }
+
+    const id = nanoid();
+    const [created] = await this.db
+      .insert(schema.familyAccounts)
+      .values({ ...account, id })
+      .returning();
+    return created;
   }
 
   // ========== OAUTH ACCOUNTS ==========
