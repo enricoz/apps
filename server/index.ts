@@ -4,6 +4,11 @@ import connectPgSimple from 'connect-pg-simple';
 import { neon } from '@neondatabase/serverless';
 import { PostgresStorage } from './storage';
 import { configurePassport } from './middleware/passport';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Import routes
 import { createAuthRoutes } from './routes/auth';
@@ -94,6 +99,19 @@ app.use('/api/analytics', createAnalyticsRoutes(storage));
 app.use('/api/incomes', createIncomeRoutes(storage));
 app.use('/api/accounts', createAccountRoutes(storage));
 app.use('/api/subscriptions', createSubscriptionRoutes(storage));
+
+// Serve static files in production
+if (process.env.NODE_ENV === 'production') {
+  const clientDistPath = path.join(__dirname, '../client');
+  app.use(express.static(clientDistPath));
+
+  // Serve index.html for all non-API routes (SPA fallback)
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api')) {
+      res.sendFile(path.join(clientDistPath, 'index.html'));
+    }
+  });
+}
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
