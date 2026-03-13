@@ -11,6 +11,7 @@ import { AnalyticsPage } from '@/pages/Analytics';
 import { RevolutPage } from '@/pages/Revolut';
 import { ProfilePage } from '@/pages/Profile';
 import { IncomePage } from '@/pages/Income';
+import { BudgetPage } from '@/pages/Budget';
 import { OnboardingPage } from '@/pages/Onboarding';
 
 interface AuthData {
@@ -66,6 +67,7 @@ function App() {
         <Switch>
           <Route path="/" component={HomePage} />
           <Route path="/income" component={IncomePage} />
+          <Route path="/budget" component={BudgetPage} />
           <Route path="/analytics" component={AnalyticsPage} />
           <Route path="/revolut" component={RevolutPage} />
           <Route path="/profile" component={ProfilePage} />

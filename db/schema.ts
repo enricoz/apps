@@ -226,6 +226,38 @@ export const insertPersonalBudgetSchema = createInsertSchema(personalBudgets, {
 
 export const selectPersonalBudgetSchema = createSelectSchema(personalBudgets);
 
+// ============ YEARLY BUDGETS TABLE (cap annuale per categoria) ============
+export const yearlyBudgets = pgTable('yearly_budgets', {
+  id: text('id').primaryKey(),
+  familyId: text('family_id').notNull().references(() => families.id, { onDelete: 'cascade' }),
+  categoryId: text('category_id').notNull().references(() => categories.id, { onDelete: 'cascade' }),
+  yearlyAmount: text('yearly_amount').notNull(), // max annual spend
+  year: integer('year').notNull(),
+  alertThreshold: integer('alert_threshold').notNull().default(80), // percentage to trigger warning
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => ({
+  uniqueCategoryYear: unique().on(table.categoryId, table.year),
+}));
+
+export const yearlyBudgetsRelations = relations(yearlyBudgets, ({ one }) => ({
+  family: one(families, {
+    fields: [yearlyBudgets.familyId],
+    references: [families.id],
+  }),
+  category: one(categories, {
+    fields: [yearlyBudgets.categoryId],
+    references: [categories.id],
+  }),
+}));
+
+export const insertYearlyBudgetSchema = createInsertSchema(yearlyBudgets, {
+  yearlyAmount: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Importo non valido'),
+  year: z.number().int().min(2020),
+  alertThreshold: z.number().int().min(1).max(100).default(80),
+});
+
+export const selectYearlyBudgetSchema = createSelectSchema(yearlyBudgets);
+
 // ============ EXPENSES TABLE ============
 export const expenses = pgTable('expenses', {
   id: text('id').primaryKey(),
@@ -427,3 +459,6 @@ export type InsertIncome = typeof incomes.$inferInsert;
 
 export type FamilyAccount = typeof familyAccounts.$inferSelect;
 export type InsertFamilyAccount = typeof familyAccounts.$inferInsert;
+
+export type YearlyBudget = typeof yearlyBudgets.$inferSelect;
+export type InsertYearlyBudget = typeof yearlyBudgets.$inferInsert;

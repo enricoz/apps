@@ -1,11 +1,11 @@
 import { Link, useLocation } from 'wouter';
-import { Home, TrendingUp, PieChart, CreditCard, User } from 'lucide-react';
+import { Home, TrendingUp, Wallet, CreditCard, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { path: '/', label: 'Home', icon: Home },
   { path: '/income', label: 'Entrate', icon: TrendingUp },
-  { path: '/analytics', label: 'Analisi', icon: PieChart },
+  { path: '/budget', label: 'Budget', icon: Wallet },
   { path: '/revolut', label: 'Banca', icon: CreditCard },
   { path: '/profile', label: 'Profilo', icon: User },
 ];
