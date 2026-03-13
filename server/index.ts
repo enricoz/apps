@@ -17,6 +17,7 @@ import { createRevolutRoutes } from './routes/revolut';
 import { createAnalyticsRoutes } from './routes/analytics';
 import { createIncomeRoutes } from './routes/incomes';
 import { createAccountRoutes } from './routes/accounts';
+import { createSubscriptionRoutes } from './routes/subscriptions';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -37,6 +38,9 @@ const sessionStore = new PgSession({
   conString: DATABASE_URL,
   createTableIfMissing: true,
 });
+
+// Stripe webhook needs raw body - mount before JSON parser
+app.use('/api/subscriptions/webhook', express.raw({ type: 'application/json' }));
 
 // Middleware
 app.use(express.json());
@@ -89,6 +93,7 @@ app.use('/api/revolut', createRevolutRoutes(storage));
 app.use('/api/analytics', createAnalyticsRoutes(storage));
 app.use('/api/incomes', createIncomeRoutes(storage));
 app.use('/api/accounts', createAccountRoutes(storage));
+app.use('/api/subscriptions', createSubscriptionRoutes(storage));
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

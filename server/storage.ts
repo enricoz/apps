@@ -19,6 +19,7 @@ import type {
   Income, InsertIncome,
   FamilyAccount, InsertFamilyAccount,
   YearlyBudget, InsertYearlyBudget,
+  Subscription, InsertSubscription,
 } from '../db/schema';
 
 export interface IStorage {
@@ -146,6 +147,13 @@ export interface IStorage {
   getRevolutConnection(userId: string): Promise<RevolutConnection | undefined>;
   upsertRevolutConnection(connection: Omit<InsertRevolutConnection, 'id'>): Promise<RevolutConnection>;
   deleteRevolutConnection(userId: string): Promise<void>;
+
+  // ========== SUBSCRIPTIONS ==========
+  getSubscription(familyId: string): Promise<Subscription | undefined>;
+  getSubscriptionByStripeCustomerId(customerId: string): Promise<Subscription | undefined>;
+  getSubscriptionByStripeSubscriptionId(subscriptionId: string): Promise<Subscription | undefined>;
+  upsertSubscription(subscription: Omit<InsertSubscription, 'id'>): Promise<Subscription>;
+  updateSubscriptionStatus(stripeSubscriptionId: string, updates: Partial<InsertSubscription>): Promise<Subscription | undefined>;
 }
 
 export class PostgresStorage implements IStorage {
@@ -1024,5 +1032,50 @@ export class PostgresStorage implements IStorage {
     await this.db
       .delete(schema.revolutConnections)
       .where(eq(schema.revolutConnections.userId, userId));
+  }
+
+  // ========== SUBSCRIPTIONS ==========
+  async getSubscription(familyId: string): Promise<Subscription | undefined> {
+    return await this.db.query.subscriptions.findFirst({
+      where: eq(schema.subscriptions.familyId, familyId),
+    });
+  }
+
+  async getSubscriptionByStripeCustomerId(customerId: string): Promise<Subscription | undefined> {
+    return await this.db.query.subscriptions.findFirst({
+      where: eq(schema.subscriptions.stripeCustomerId, customerId),
+    });
+  }
+
+  async getSubscriptionByStripeSubscriptionId(subscriptionId: string): Promise<Subscription | undefined> {
+    return await this.db.query.subscriptions.findFirst({
+      where: eq(schema.subscriptions.stripeSubscriptionId, subscriptionId),
+    });
+  }
+
+  async upsertSubscription(subscription: Omit<InsertSubscription, 'id'>): Promise<Subscription> {
+    const existing = await this.getSubscription(subscription.familyId);
+    if (existing) {
+      const [updated] = await this.db
+        .update(schema.subscriptions)
+        .set({ ...subscription, updatedAt: new Date() })
+        .where(eq(schema.subscriptions.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await this.db
+      .insert(schema.subscriptions)
+      .values({ ...subscription, id: nanoid() })
+      .returning();
+    return created;
+  }
+
+  async updateSubscriptionStatus(stripeSubscriptionId: string, updates: Partial<InsertSubscription>): Promise<Subscription | undefined> {
+    const [updated] = await this.db
+      .update(schema.subscriptions)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.subscriptions.stripeSubscriptionId, stripeSubscriptionId))
+      .returning();
+    return updated;
   }
 }

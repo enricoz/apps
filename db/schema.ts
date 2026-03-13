@@ -417,6 +417,33 @@ export const revolutConnectionsRelations = relations(revolutConnections, ({ one 
 export const insertRevolutConnectionSchema = createInsertSchema(revolutConnections);
 export const selectRevolutConnectionSchema = createSelectSchema(revolutConnections);
 
+// ============ SUBSCRIPTIONS TABLE ============
+export const subscriptions = pgTable('subscriptions', {
+  id: text('id').primaryKey(),
+  familyId: text('family_id').notNull().references(() => families.id, { onDelete: 'cascade' }).unique(),
+  stripeCustomerId: text('stripe_customer_id').notNull(),
+  stripeSubscriptionId: text('stripe_subscription_id'),
+  stripePriceId: text('stripe_price_id'),
+  status: text('status').notNull().$type<'active' | 'canceled' | 'past_due' | 'trialing' | 'incomplete' | 'unpaid'>().default('incomplete'),
+  plan: text('plan').notNull().$type<'free' | 'base' | 'premium'>().default('free'),
+  currentPeriodStart: timestamp('current_period_start'),
+  currentPeriodEnd: timestamp('current_period_end'),
+  cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
+  trialEnd: timestamp('trial_end'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
+  family: one(families, {
+    fields: [subscriptions.familyId],
+    references: [families.id],
+  }),
+}));
+
+export const insertSubscriptionSchema = createInsertSchema(subscriptions);
+export const selectSubscriptionSchema = createSelectSchema(subscriptions);
+
 // ============ TYPES ============
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
@@ -462,3 +489,6 @@ export type InsertFamilyAccount = typeof familyAccounts.$inferInsert;
 
 export type YearlyBudget = typeof yearlyBudgets.$inferSelect;
 export type InsertYearlyBudget = typeof yearlyBudgets.$inferInsert;
+
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = typeof subscriptions.$inferInsert;

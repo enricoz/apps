@@ -12,6 +12,7 @@ import { RevolutPage } from '@/pages/Revolut';
 import { ProfilePage } from '@/pages/Profile';
 import { IncomePage } from '@/pages/Income';
 import { BudgetPage } from '@/pages/Budget';
+import { SubscriptionPage } from '@/pages/Subscription';
 import { OnboardingPage } from '@/pages/Onboarding';
 
 interface AuthData {
@@ -70,6 +71,7 @@ function App() {
           <Route path="/budget" component={BudgetPage} />
           <Route path="/analytics" component={AnalyticsPage} />
           <Route path="/revolut" component={RevolutPage} />
+          <Route path="/subscription" component={SubscriptionPage} />
           <Route path="/profile" component={ProfilePage} />
           <Route>
             <div className="p-4 text-center">
