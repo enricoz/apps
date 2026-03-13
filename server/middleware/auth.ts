@@ -5,6 +5,7 @@ import bcrypt from 'bcrypt';
 declare module 'express-session' {
   interface SessionData {
     userId?: string;
+    revolutState?: string;
   }
 }
 

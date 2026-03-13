@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { IStorage } from '../storage';
 import { isAuthenticated } from '../middleware/auth';
-import { insertBudgetSchema, insertFamilyBudgetSchema, insertPersonalBudgetSchema, insertYearlyBudgetSchema } from '../../db/schema';
+import { insertBudgetSchema, insertFamilyBudgetSchema, insertPersonalBudgetSchema } from '../../db/schema';
 
 const yearlyBudgetBodySchema = z.object({
   yearlyAmount: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Importo non valido'),
