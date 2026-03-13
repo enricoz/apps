@@ -97,6 +97,12 @@ export interface IStorage {
 
   getPersonalSpending(userId: string, month: number, year: number): Promise<string>;
 
+  getMonthlyTrend(familyId: string, userId: string, months: number): Promise<Array<{
+    month: number;
+    year: number;
+    total: string;
+  }>>;
+
   // ========== INVITES ==========
   getInvite(token: string): Promise<Invite | undefined>;
   getInvitesByFamily(familyId: string): Promise<Invite[]>;
@@ -637,6 +643,25 @@ export class PostgresStorage implements IStorage {
       );
 
     return result[0]?.total || '0';
+  }
+
+  async getMonthlyTrend(familyId: string, userId: string, months: number): Promise<Array<{
+    month: number;
+    year: number;
+    total: string;
+  }>> {
+    const results: Array<{ month: number; year: number; total: string }> = [];
+    const now = new Date();
+
+    for (let i = months - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const m = d.getMonth() + 1;
+      const y = d.getFullYear();
+      const total = await this.getTotalSpending(familyId, userId, m, y);
+      results.push({ month: m, year: y, total });
+    }
+
+    return results;
   }
 
   // ========== INVITES ==========

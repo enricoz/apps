@@ -1,5 +1,6 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { LogOut, Users, ChevronRight, Crown, CreditCard, Bell, Tag, Target } from 'lucide-react';
+import { useLocation } from 'wouter';
+import { LogOut, Users, ChevronRight, Crown, CreditCard, Bell, Tag, Target, PieChart } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +9,8 @@ import { apiRequest } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 export function ProfilePage() {
+  const [, navigate] = useLocation();
+
   const { data: authData } = useQuery({
     queryKey: ['/api/auth/me'],
     queryFn: () => apiRequest('/api/auth/me'),
@@ -26,10 +29,11 @@ export function ProfilePage() {
     : user?.email?.[0]?.toUpperCase() || '?';
 
   const settingsItems = [
-    { icon: Tag, label: 'Categorie', description: 'Gestisci le categorie di spesa' },
-    { icon: Target, label: 'Budget', description: 'Imposta limiti di spesa' },
-    { icon: Bell, label: 'Notifiche', description: 'Preferenze notifiche' },
-    { icon: CreditCard, label: 'Abbonamento', description: 'Piano e fatturazione' },
+    { icon: PieChart, label: 'Analisi', description: 'Statistiche e grafici', path: '/analytics' },
+    { icon: Target, label: 'Budget', description: 'Imposta limiti di spesa', path: '/budget' },
+    { icon: Tag, label: 'Categorie', description: 'Gestisci le categorie di spesa', path: null },
+    { icon: Bell, label: 'Notifiche', description: 'Preferenze notifiche', path: null },
+    { icon: CreditCard, label: 'Abbonamento', description: 'Piano e fatturazione', path: '/subscription' },
   ];
 
   return (
@@ -99,9 +103,11 @@ export function ProfilePage() {
           {settingsItems.map((item, i) => (
             <button
               key={item.label}
+              onClick={() => item.path && navigate(item.path)}
               className={cn(
                 'w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors text-left',
-                i < settingsItems.length - 1 && 'border-b border-border'
+                i < settingsItems.length - 1 && 'border-b border-border',
+                !item.path && 'opacity-50 cursor-default'
               )}
             >
               <div className="flex items-center gap-3">

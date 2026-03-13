@@ -74,6 +74,26 @@ export function createAnalyticsRoutes(storage: IStorage) {
     }
   });
 
+  // Get monthly spending trend (last N months)
+  router.get('/monthly-trend', async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+
+      const member = await storage.getFamilyMember(userId);
+      if (!member) {
+        return res.status(400).json({ error: 'Non fai parte di una famiglia' });
+      }
+
+      const months = parseInt(req.query.months as string) || 6;
+      const trend = await storage.getMonthlyTrend(member.familyId, userId, Math.min(months, 12));
+
+      res.json(trend);
+    } catch (error) {
+      console.error('Get monthly trend error:', error);
+      res.status(500).json({ error: 'Errore durante il recupero del trend mensile' });
+    }
+  });
+
   // Get personal spending
   router.get('/personal-spending', async (req, res) => {
     try {
