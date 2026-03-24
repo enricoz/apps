@@ -1,5 +1,6 @@
 import crypto from 'crypto';
-import { sign } from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
+const { sign } = jwt;
 
 /**
  * Revolut Open Banking API Service

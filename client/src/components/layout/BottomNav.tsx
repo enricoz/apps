@@ -1,11 +1,11 @@
 import { Link, useLocation } from 'wouter';
-import { Home, TrendingUp, Wallet, CreditCard, User } from 'lucide-react';
+import { Home, BarChart3, Wallet, CreditCard, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { path: '/', label: 'Home', icon: Home },
-  { path: '/income', label: 'Entrate', icon: TrendingUp },
   { path: '/budget', label: 'Budget', icon: Wallet },
+  { path: '/analytics', label: 'Report', icon: BarChart3 },
   { path: '/revolut', label: 'Banca', icon: CreditCard },
   { path: '/profile', label: 'Profilo', icon: User },
 ];
@@ -21,22 +21,22 @@ export function BottomNav() {
           const Icon = item.icon;
 
           return (
-            <Link key={item.path} href={item.path}>
-              <a
-                className={cn(
-                  'flex flex-col items-center justify-center w-14 h-full gap-0.5 relative',
-                  'active:scale-95 transition-all duration-200',
-                  isActive
-                    ? 'text-primary'
-                    : 'text-muted-foreground'
-                )}
-              >
-                {isActive && (
-                  <span className="absolute -top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-primary rounded-full" />
-                )}
-                <Icon className={cn('h-5 w-5', isActive && 'drop-shadow-sm')} strokeWidth={isActive ? 2.5 : 2} />
-                <span className={cn('text-[10px] font-medium', isActive && 'font-semibold')}>{item.label}</span>
-              </a>
+            <Link
+              key={item.path}
+              href={item.path}
+              className={cn(
+                'flex flex-col items-center justify-center w-14 h-full gap-0.5 relative',
+                'active:scale-95 transition-all duration-200',
+                isActive
+                  ? 'text-primary'
+                  : 'text-muted-foreground'
+              )}
+            >
+              {isActive && (
+                <span className="absolute -top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-primary rounded-full" />
+              )}
+              <Icon className={cn('h-5 w-5', isActive && 'drop-shadow-sm')} strokeWidth={isActive ? 2.5 : 2} />
+              <span className={cn('text-[10px] font-medium', isActive && 'font-semibold')}>{item.label}</span>
             </Link>
           );
         })}

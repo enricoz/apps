@@ -2,7 +2,16 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { IStorage } from '../storage';
 import { isAuthenticated } from '../middleware/auth';
-import { insertExpenseSchema } from '../../db/schema';
+
+const amountRegex = /^\d+(\.\d{1,2})?$/;
+
+const createExpenseBodySchema = z.object({
+  categoryId: z.string().min(1),
+  description: z.string().min(1, 'Descrizione obbligatoria'),
+  amount: z.string().regex(amountRegex, 'Importo non valido'),
+  date: z.string().optional(),
+  notes: z.string().optional(),
+});
 
 const getExpensesQuerySchema = z.object({
   categoryId: z.string().optional(),
@@ -88,14 +97,13 @@ export function createExpenseRoutes(storage: IStorage) {
         return res.status(400).json({ error: 'Categoria non trovata o non autorizzato' });
       }
 
-      const data = insertExpenseSchema.parse({
-        ...req.body,
+      const body = createExpenseBodySchema.parse(req.body);
+      const expense = await storage.createExpense({
+        ...body,
         familyId: member.familyId,
         userId,
-        date: req.body.date ? new Date(req.body.date) : new Date(),
+        date: body.date ? new Date(body.date) : new Date(),
       });
-
-      const expense = await storage.createExpense(data);
 
       // Check if budget is exceeded and create notification
       const expenseDate = new Date(expense.date);

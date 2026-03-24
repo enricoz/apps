@@ -85,7 +85,7 @@ export function createAccountRoutes(storage: IStorage) {
       }
 
       const totalIncome = await storage.getTotalIncome(member.familyId, month, year);
-      const totalSpending = await storage.getTotalSpending(member.familyId, userId, month, year);
+      const totalSpending = await storage.getTotalSpending(member.familyId, month, year);
 
       const income = parseFloat(totalIncome);
       const spending = parseFloat(totalSpending);

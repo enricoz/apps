@@ -1,4 +1,5 @@
-import { Route, Switch } from 'wouter';
+import { useEffect } from 'react';
+import { Route, Switch, useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/api';
 import { Toaster } from '@/components/ui/toaster';
@@ -13,7 +14,10 @@ import { ProfilePage } from '@/pages/Profile';
 import { IncomePage } from '@/pages/Income';
 import { BudgetPage } from '@/pages/Budget';
 import { SubscriptionPage } from '@/pages/Subscription';
+import { FamilyPage } from '@/pages/Family';
 import { OnboardingPage } from '@/pages/Onboarding';
+import { CategoriesPage } from '@/pages/Categories';
+import { AcceptInvitePage } from '@/pages/AcceptInvite';
 
 interface AuthData {
   user: any;
@@ -22,11 +26,23 @@ interface AuthData {
 }
 
 function App() {
+  const [, navigate] = useLocation();
   const { data: authData, isLoading } = useQuery<AuthData>({
     queryKey: ['/api/auth/me'],
     queryFn: () => apiRequest('/api/auth/me'),
     retry: false,
   });
+
+  // After OAuth login, redirect to pending invite if stored
+  useEffect(() => {
+    if (authData?.user) {
+      const pendingInvite = localStorage.getItem('pendingInvite');
+      if (pendingInvite) {
+        localStorage.removeItem('pendingInvite');
+        navigate(pendingInvite);
+      }
+    }
+  }, [authData?.user]);
 
   if (isLoading) {
     return (
@@ -43,6 +59,17 @@ function App() {
 
   // Not authenticated
   if (!authData?.user) {
+    // Check if visiting invite link — show invite page instead of landing
+    if (window.location.pathname.startsWith('/invite/')) {
+      return (
+        <div className="app-container">
+          <Switch>
+            <Route path="/invite/:token" component={AcceptInvitePage} />
+          </Switch>
+          <Toaster />
+        </div>
+      );
+    }
     return (
       <div className="app-container">
         <LandingPage />
@@ -51,8 +78,18 @@ function App() {
     );
   }
 
-  // Authenticated but no family - show onboarding
+  // Authenticated but no family - check for invite link first
   if (!authData.familyMember) {
+    if (window.location.pathname.startsWith('/invite/')) {
+      return (
+        <div className="app-container">
+          <Switch>
+            <Route path="/invite/:token" component={AcceptInvitePage} />
+          </Switch>
+          <Toaster />
+        </div>
+      );
+    }
     return (
       <div className="app-container">
         <OnboardingPage />
@@ -72,7 +109,10 @@ function App() {
           <Route path="/analytics" component={AnalyticsPage} />
           <Route path="/revolut" component={RevolutPage} />
           <Route path="/subscription" component={SubscriptionPage} />
+          <Route path="/family" component={FamilyPage} />
           <Route path="/profile" component={ProfilePage} />
+          <Route path="/categories" component={CategoriesPage} />
+          <Route path="/invite/:token" component={AcceptInvitePage} />
           <Route>
             <div className="p-4 text-center">
               <h1 className="text-2xl font-bold">404 - Pagina non trovata</h1>

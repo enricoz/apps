@@ -148,6 +148,30 @@ export function createAuthRoutes(storage: IStorage) {
     }
   });
 
+  // Update profile
+  router.patch('/profile', isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const updateSchema = z.object({
+        fullName: z.string().min(1).optional(),
+        profilePicture: z.string().optional(),
+      });
+      const data = updateSchema.parse(req.body);
+      const updated = await storage.updateUser(userId, data);
+      if (!updated) {
+        return res.status(404).json({ error: 'Utente non trovato' });
+      }
+      const { password, ...userWithoutPassword } = updated;
+      res.json({ user: userWithoutPassword });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors[0].message });
+      }
+      console.error('Update profile error:', error);
+      res.status(500).json({ error: 'Errore durante l\'aggiornamento del profilo' });
+    }
+  });
+
   // ========== OAUTH ROUTES ==========
   const CLIENT_URL = process.env.CLIENT_URL || '/';
 

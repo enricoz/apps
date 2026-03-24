@@ -26,7 +26,6 @@ export function createAnalyticsRoutes(storage: IStorage) {
 
       const query = analyticsQuerySchema.parse(req.query);
 
-      // CRITICAL: This method filters by userId to show only categories the user has access to
       const spending = await storage.getFamilySpendingByCategory(
         member.familyId,
         userId,
@@ -56,10 +55,8 @@ export function createAnalyticsRoutes(storage: IStorage) {
 
       const query = analyticsQuerySchema.parse(req.query);
 
-      // CRITICAL: This method filters by userId
       const total = await storage.getTotalSpending(
         member.familyId,
-        userId,
         query.month,
         query.year
       );
@@ -85,12 +82,28 @@ export function createAnalyticsRoutes(storage: IStorage) {
       }
 
       const months = parseInt(req.query.months as string) || 6;
-      const trend = await storage.getMonthlyTrend(member.familyId, userId, Math.min(months, 12));
+      const trend = await storage.getMonthlyTrend(member.familyId, Math.min(months, 12));
 
       res.json(trend);
     } catch (error) {
       console.error('Get monthly trend error:', error);
       res.status(500).json({ error: 'Errore durante il recupero del trend mensile' });
+    }
+  });
+
+  // Get personal spending by category
+  router.get('/personal-spending-by-category', async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const query = analyticsQuerySchema.parse(req.query);
+      const spending = await storage.getPersonalSpendingByCategory(userId, query.month, query.year);
+      res.json(spending);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors[0].message });
+      }
+      console.error('Get personal spending by category error:', error);
+      res.status(500).json({ error: 'Errore' });
     }
   });
 

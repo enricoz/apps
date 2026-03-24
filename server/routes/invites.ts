@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { IStorage } from '../storage';
 import { isAuthenticated } from '../middleware/auth';
+import { sendMail, buildInviteEmail } from '../lib/mailer';
 
 const createInviteSchema = z.object({
   email: z.string().email('Email non valida'),
@@ -80,11 +81,25 @@ export function createInviteRoutes(storage: IStorage) {
         expiresAt,
       });
 
-      // TODO: Send email with invite link
-      // For now, return the token so it can be shared manually
+      const inviteUrl = `${req.protocol}://${req.get('host')}/invite/${token}`;
+
+      // Send invite email
+      const inviter = await storage.getUser(userId);
+      const family = await storage.getFamily(member.familyId);
+      const emailSent = await sendMail({
+        to: data.email,
+        subject: `${inviter?.fullName || 'Qualcuno'} ti ha invitato su Family Budget`,
+        html: buildInviteEmail(
+          inviteUrl,
+          family?.name || 'la famiglia',
+          inviter?.fullName || inviter?.email || 'Un membro'
+        ),
+      });
+
       res.json({
         ...invite,
-        inviteUrl: `${req.protocol}://${req.get('host')}/invite/${token}`,
+        inviteUrl,
+        emailSent,
       });
     } catch (error) {
       if (error instanceof z.ZodError) {

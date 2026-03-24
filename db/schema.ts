@@ -113,6 +113,7 @@ export const categories = pgTable('categories', {
   icon: text('icon').notNull(), // emoji
   isPrivate: boolean('is_private').notNull().default(false),
   userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }), // required if isPrivate=true
+  categoryGroup: text('category_group').$type<'sopravvivenza' | 'necessarie' | 'necessarie_personali' | 'voluttarie' | 'investimenti'>(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
@@ -225,6 +226,33 @@ export const insertPersonalBudgetSchema = createInsertSchema(personalBudgets, {
 });
 
 export const selectPersonalBudgetSchema = createSelectSchema(personalBudgets);
+
+// ============ PERSONAL CATEGORY BUDGETS TABLE (limiti personali per categoria) ============
+export const personalCategoryBudgets = pgTable('personal_category_budgets', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  categoryId: text('category_id').notNull().references(() => categories.id, { onDelete: 'cascade' }),
+  amount: text('amount').notNull(),
+  month: integer('month').notNull(),
+  year: integer('year').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => ({
+  uniqueUserCategoryMonth: unique().on(table.userId, table.categoryId, table.month, table.year),
+}));
+
+export const personalCategoryBudgetsRelations = relations(personalCategoryBudgets, ({ one }) => ({
+  user: one(users, {
+    fields: [personalCategoryBudgets.userId],
+    references: [users.id],
+  }),
+  category: one(categories, {
+    fields: [personalCategoryBudgets.categoryId],
+    references: [categories.id],
+  }),
+}));
+
+export const insertPersonalCategoryBudgetSchema = createInsertSchema(personalCategoryBudgets);
+export const selectPersonalCategoryBudgetSchema = createSelectSchema(personalCategoryBudgets);
 
 // ============ YEARLY BUDGETS TABLE (cap annuale per categoria) ============
 export const yearlyBudgets = pgTable('yearly_budgets', {
@@ -492,3 +520,6 @@ export type InsertYearlyBudget = typeof yearlyBudgets.$inferInsert;
 
 export type Subscription = typeof subscriptions.$inferSelect;
 export type InsertSubscription = typeof subscriptions.$inferInsert;
+
+export type PersonalCategoryBudget = typeof personalCategoryBudgets.$inferSelect;
+export type InsertPersonalCategoryBudget = typeof personalCategoryBudgets.$inferInsert;

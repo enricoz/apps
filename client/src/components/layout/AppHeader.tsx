@@ -1,14 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
-import { Bell } from 'lucide-react';
+import { useLocation } from 'wouter';
+import { Bell, ArrowLeft } from 'lucide-react';
 import { apiRequest } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 interface AppHeaderProps {
   title?: string;
   subtitle?: string;
+  showBack?: boolean;
 }
 
-export function AppHeader({ title, subtitle }: AppHeaderProps) {
+export function AppHeader({ title, subtitle, showBack }: AppHeaderProps) {
+  const [, navigate] = useLocation();
   const { data: authData } = useQuery({
     queryKey: ['/api/auth/me'],
     queryFn: () => apiRequest('/api/auth/me'),
@@ -25,7 +28,12 @@ export function AppHeader({ title, subtitle }: AppHeaderProps) {
 
   return (
     <div className="flex items-center justify-between px-5 pt-5 pb-2">
-      <div>
+      <div className="flex items-center gap-2">
+        {showBack && (
+          <button onClick={() => window.history.back()} className="p-1.5 -ml-1.5 rounded-full hover:bg-secondary transition-colors">
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+        )}
         <h1 className="text-2xl font-bold tracking-tight">
           {title || `Ciao, ${displayName}`}
         </h1>

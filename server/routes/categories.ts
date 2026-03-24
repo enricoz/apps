@@ -2,7 +2,19 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { IStorage } from '../storage';
 import { isAuthenticated } from '../middleware/auth';
-import { insertCategorySchema } from '../../db/schema';
+
+const createCategoryBodySchema = z.object({
+  name: z.string().min(1, 'Nome obbligatorio'),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Colore non valido'),
+  icon: z.string().min(1, 'Icona obbligatoria'),
+  isPrivate: z.boolean().optional().default(false),
+});
+
+const updateCategoryBodySchema = z.object({
+  name: z.string().min(1).optional(),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  icon: z.string().min(1).optional(),
+});
 
 export function createCategoryRoutes(storage: IStorage) {
   const router = Router();
@@ -41,13 +53,12 @@ export function createCategoryRoutes(storage: IStorage) {
         return res.status(400).json({ error: 'Non fai parte di una famiglia' });
       }
 
-      const data = insertCategorySchema.parse({
-        ...req.body,
+      const body = createCategoryBodySchema.parse(req.body);
+      const category = await storage.createCategory({
+        ...body,
         familyId: member.familyId,
-        userId: req.body.isPrivate ? userId : null,
+        userId: body.isPrivate ? userId : null,
       });
-
-      const category = await storage.createCategory(data);
 
       res.json(category);
     } catch (error) {
@@ -65,7 +76,7 @@ export function createCategoryRoutes(storage: IStorage) {
       const userId = req.session.userId!;
       const { id } = req.params;
 
-      const data = insertCategorySchema.partial().parse(req.body);
+      const data = updateCategoryBodySchema.parse(req.body);
 
       // CRITICAL: updateCategory checks if user owns the category
       const category = await storage.updateCategory(id, userId, data);

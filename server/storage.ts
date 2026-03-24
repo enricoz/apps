@@ -20,6 +20,7 @@ import type {
   FamilyAccount, InsertFamilyAccount,
   YearlyBudget, InsertYearlyBudget,
   Subscription, InsertSubscription,
+  PersonalCategoryBudget, InsertPersonalCategoryBudget,
 } from '../db/schema';
 
 export interface IStorage {
@@ -62,6 +63,12 @@ export interface IStorage {
   getPersonalBudget(userId: string, month: number, year: number): Promise<PersonalBudget | undefined>;
   upsertPersonalBudget(budget: Omit<InsertPersonalBudget, 'id'>): Promise<PersonalBudget>;
 
+  // ========== PERSONAL CATEGORY BUDGETS ==========
+  getPersonalCategoryBudgets(userId: string, month: number, year: number): Promise<PersonalCategoryBudget[]>;
+  getPersonalCategoryBudget(userId: string, categoryId: string, month: number, year: number): Promise<PersonalCategoryBudget | undefined>;
+  upsertPersonalCategoryBudget(budget: Omit<InsertPersonalCategoryBudget, 'id'>): Promise<PersonalCategoryBudget>;
+  getPersonalCategorySpending(userId: string, categoryId: string, month: number, year: number): Promise<string>;
+
   // ========== YEARLY BUDGETS ==========
   getYearlyBudgets(familyId: string, year: number): Promise<YearlyBudget[]>;
   getYearlyBudget(categoryId: string, year: number): Promise<YearlyBudget | undefined>;
@@ -91,13 +98,14 @@ export interface IStorage {
     total: string;
   }>>;
 
-  getTotalSpending(familyId: string, userId: string, month: number, year: number): Promise<string>;
+  getTotalSpending(familyId: string, month: number, year: number): Promise<string>;
 
   getCategorySpending(familyId: string, categoryId: string, month: number, year: number): Promise<string>;
 
   getPersonalSpending(userId: string, month: number, year: number): Promise<string>;
+  getPersonalSpendingByCategory(userId: string, month: number, year: number): Promise<Array<{ categoryId: string; categoryName: string; categoryColor: string; categoryIcon: string; total: string; }>>;
 
-  getMonthlyTrend(familyId: string, userId: string, months: number): Promise<Array<{
+  getMonthlyTrend(familyId: string, months: number): Promise<Array<{
     month: number;
     year: number;
     total: string;
@@ -269,15 +277,17 @@ export class PostgresStorage implements IStorage {
   }
 
   // ========== CATEGORIES ==========
-  // CRITICAL: Always filter by userId for private categories
-  async getCategories(familyId: string, userId: string): Promise<Category[]> {
+  // Show family categories + only this user's private categories
+  async getCategories(familyId: string, userId?: string): Promise<Category[]> {
     return await this.db.query.categories.findMany({
       where: and(
         eq(schema.categories.familyId, familyId),
-        or(
-          eq(schema.categories.isPrivate, false),
-          eq(schema.categories.userId, userId)
-        )
+        userId
+          ? or(
+              eq(schema.categories.isPrivate, false),
+              and(eq(schema.categories.isPrivate, true), eq(schema.categories.userId, userId))
+            )
+          : undefined
       ),
       orderBy: [schema.categories.name],
     });
@@ -285,14 +295,14 @@ export class PostgresStorage implements IStorage {
 
   async getCategory(id: string, userId: string): Promise<Category | undefined> {
     const category = await this.db.query.categories.findFirst({
-      where: eq(schema.categories.id, id),
+      where: and(
+        eq(schema.categories.id, id),
+        or(
+          eq(schema.categories.isPrivate, false),
+          and(eq(schema.categories.isPrivate, true), eq(schema.categories.userId, userId))
+        )
+      ),
     });
-
-    // Check if user has access to this category
-    if (category && category.isPrivate && category.userId !== userId) {
-      return undefined;
-    }
-
     return category;
   }
 
@@ -436,6 +446,63 @@ export class PostgresStorage implements IStorage {
     return created;
   }
 
+  // ========== PERSONAL CATEGORY BUDGETS ==========
+  async getPersonalCategoryBudgets(userId: string, month: number, year: number): Promise<PersonalCategoryBudget[]> {
+    return await this.db.query.personalCategoryBudgets.findMany({
+      where: and(
+        eq(schema.personalCategoryBudgets.userId, userId),
+        eq(schema.personalCategoryBudgets.month, month),
+        eq(schema.personalCategoryBudgets.year, year)
+      ),
+    });
+  }
+
+  async getPersonalCategoryBudget(userId: string, categoryId: string, month: number, year: number): Promise<PersonalCategoryBudget | undefined> {
+    return await this.db.query.personalCategoryBudgets.findFirst({
+      where: and(
+        eq(schema.personalCategoryBudgets.userId, userId),
+        eq(schema.personalCategoryBudgets.categoryId, categoryId),
+        eq(schema.personalCategoryBudgets.month, month),
+        eq(schema.personalCategoryBudgets.year, year)
+      ),
+    });
+  }
+
+  async upsertPersonalCategoryBudget(budget: Omit<InsertPersonalCategoryBudget, 'id'>): Promise<PersonalCategoryBudget> {
+    const existing = await this.getPersonalCategoryBudget(budget.userId, budget.categoryId, budget.month, budget.year);
+    if (existing) {
+      const [updated] = await this.db
+        .update(schema.personalCategoryBudgets)
+        .set({ amount: budget.amount })
+        .where(eq(schema.personalCategoryBudgets.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const id = nanoid();
+    const [created] = await this.db
+      .insert(schema.personalCategoryBudgets)
+      .values({ ...budget, id })
+      .returning();
+    return created;
+  }
+
+  async getPersonalCategorySpending(userId: string, categoryId: string, month: number, year: number): Promise<string> {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59);
+    const result = await this.db
+      .select({
+        total: sql<string>`COALESCE(SUM(CAST(${schema.expenses.amount} AS NUMERIC)), 0)::text`,
+      })
+      .from(schema.expenses)
+      .where(and(
+        eq(schema.expenses.userId, userId),
+        eq(schema.expenses.categoryId, categoryId),
+        gte(schema.expenses.date, startDate),
+        lte(schema.expenses.date, endDate)
+      ));
+    return result[0]?.total || '0';
+  }
+
   // ========== EXPENSES ==========
   // CRITICAL: Filter by userId for private category expenses
   async getExpenses(
@@ -471,10 +538,8 @@ export class PostgresStorage implements IStorage {
       orderBy: [desc(schema.expenses.date)],
     });
 
-    // Filter out expenses from private categories that don't belong to the user
-    return expenses.filter(expense =>
-      !expense.category.isPrivate || expense.category.userId === userId
-    );
+    // All family members can see all expenses
+    return expenses;
   }
 
   async getExpense(id: string, userId: string): Promise<(Expense & { category: Category }) | undefined> {
@@ -489,11 +554,7 @@ export class PostgresStorage implements IStorage {
       return undefined;
     }
 
-    // Check if user has access to this expense
-    if (expense.category.isPrivate && expense.category.userId !== userId) {
-      return undefined;
-    }
-
+    // All family members can see all expenses
     return expense;
   }
 
@@ -562,11 +623,7 @@ export class PostgresStorage implements IStorage {
         and(
           eq(schema.expenses.familyId, familyId),
           gte(schema.expenses.date, startDate),
-          lte(schema.expenses.date, endDate),
-          or(
-            eq(schema.categories.isPrivate, false),
-            eq(schema.categories.userId, userId)
-          )
+          lte(schema.expenses.date, endDate)
         )
       )
       .groupBy(
@@ -579,7 +636,48 @@ export class PostgresStorage implements IStorage {
     return result;
   }
 
-  async getTotalSpending(familyId: string, userId: string, month: number, year: number): Promise<string> {
+  async getPersonalSpendingByCategory(
+    userId: string,
+    month: number,
+    year: number
+  ): Promise<Array<{
+    categoryId: string;
+    categoryName: string;
+    categoryColor: string;
+    categoryIcon: string;
+    total: string;
+  }>> {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59);
+
+    const result = await this.db
+      .select({
+        categoryId: schema.categories.id,
+        categoryName: schema.categories.name,
+        categoryColor: schema.categories.color,
+        categoryIcon: schema.categories.icon,
+        total: sql<string>`COALESCE(SUM(CAST(${schema.expenses.amount} AS NUMERIC)), 0)::text`,
+      })
+      .from(schema.expenses)
+      .innerJoin(schema.categories, eq(schema.expenses.categoryId, schema.categories.id))
+      .where(
+        and(
+          eq(schema.expenses.userId, userId),
+          gte(schema.expenses.date, startDate),
+          lte(schema.expenses.date, endDate)
+        )
+      )
+      .groupBy(
+        schema.categories.id,
+        schema.categories.name,
+        schema.categories.color,
+        schema.categories.icon
+      );
+
+    return result;
+  }
+
+  async getTotalSpending(familyId: string, month: number, year: number): Promise<string> {
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0, 23, 59, 59);
 
@@ -588,16 +686,11 @@ export class PostgresStorage implements IStorage {
         total: sql<string>`COALESCE(SUM(CAST(${schema.expenses.amount} AS NUMERIC)), 0)::text`,
       })
       .from(schema.expenses)
-      .innerJoin(schema.categories, eq(schema.expenses.categoryId, schema.categories.id))
       .where(
         and(
           eq(schema.expenses.familyId, familyId),
           gte(schema.expenses.date, startDate),
-          lte(schema.expenses.date, endDate),
-          or(
-            eq(schema.categories.isPrivate, false),
-            eq(schema.categories.userId, userId)
-          )
+          lte(schema.expenses.date, endDate)
         )
       );
 
@@ -645,7 +738,7 @@ export class PostgresStorage implements IStorage {
     return result[0]?.total || '0';
   }
 
-  async getMonthlyTrend(familyId: string, userId: string, months: number): Promise<Array<{
+  async getMonthlyTrend(familyId: string, months: number): Promise<Array<{
     month: number;
     year: number;
     total: string;
@@ -657,7 +750,7 @@ export class PostgresStorage implements IStorage {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const m = d.getMonth() + 1;
       const y = d.getFullYear();
-      const total = await this.getTotalSpending(familyId, userId, m, y);
+      const total = await this.getTotalSpending(familyId, m, y);
       results.push({ month: m, year: y, total });
     }
 

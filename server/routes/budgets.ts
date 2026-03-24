@@ -2,10 +2,29 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { IStorage } from '../storage';
 import { isAuthenticated } from '../middleware/auth';
-import { insertBudgetSchema, insertFamilyBudgetSchema, insertPersonalBudgetSchema } from '../../db/schema';
+
+const amountRegex = /^\d+(\.\d{1,2})?$/;
+
+const familyBudgetBodySchema = z.object({
+  totalAmount: z.string().regex(amountRegex, 'Importo non valido'),
+  month: z.number().int().min(1).max(12),
+  year: z.number().int().min(2020),
+});
+
+const personalBudgetBodySchema = z.object({
+  totalAmount: z.string().regex(amountRegex, 'Importo non valido'),
+  month: z.number().int().min(1).max(12),
+  year: z.number().int().min(2020),
+});
+
+const categoryBudgetBodySchema = z.object({
+  amount: z.string().regex(amountRegex, 'Importo non valido'),
+  month: z.number().int().min(1).max(12),
+  year: z.number().int().min(2020),
+});
 
 const yearlyBudgetBodySchema = z.object({
-  yearlyAmount: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Importo non valido'),
+  yearlyAmount: z.string().regex(amountRegex, 'Importo non valido'),
   year: z.number().int().min(2020),
   alertThreshold: z.number().int().min(1).max(100).default(80),
 });
@@ -60,12 +79,11 @@ export function createBudgetRoutes(storage: IStorage) {
         return res.status(403).json({ error: 'Solo gli admin possono impostare il budget famiglia' });
       }
 
-      const data = insertFamilyBudgetSchema.parse({
-        ...req.body,
+      const body = familyBudgetBodySchema.parse(req.body);
+      const budget = await storage.upsertFamilyBudget({
         familyId: member.familyId,
+        ...body,
       });
-
-      const budget = await storage.upsertFamilyBudget(data);
 
       res.json(budget);
     } catch (error) {
@@ -125,13 +143,12 @@ export function createBudgetRoutes(storage: IStorage) {
         }
       }
 
-      const data = insertBudgetSchema.parse({
-        ...req.body,
+      const body = categoryBudgetBodySchema.parse(req.body);
+      const budget = await storage.upsertBudget({
         familyId: member.familyId,
         categoryId,
+        ...body,
       });
-
-      const budget = await storage.upsertBudget(data);
 
       res.json(budget);
     } catch (error) {
@@ -166,12 +183,11 @@ export function createBudgetRoutes(storage: IStorage) {
     try {
       const userId = req.session.userId!;
 
-      const data = insertPersonalBudgetSchema.parse({
-        ...req.body,
+      const body = personalBudgetBodySchema.parse(req.body);
+      const budget = await storage.upsertPersonalBudget({
         userId,
+        ...body,
       });
-
-      const budget = await storage.upsertPersonalBudget(data);
 
       res.json(budget);
     } catch (error) {
@@ -180,6 +196,97 @@ export function createBudgetRoutes(storage: IStorage) {
       }
       console.error('Set personal budget error:', error);
       res.status(500).json({ error: 'Errore durante l\'impostazione del budget personale' });
+    }
+  });
+
+  // ============ PERSONAL CATEGORY BUDGETS ============
+
+  // Get personal category budgets
+  router.get('/personal/categories', async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const query = budgetQuerySchema.parse(req.query);
+      const budgets = await storage.getPersonalCategoryBudgets(userId, query.month, query.year);
+      res.json(budgets);
+    } catch (error) {
+      console.error('Get personal category budgets error:', error);
+      res.status(500).json({ error: 'Errore' });
+    }
+  });
+
+  // Set personal category budget
+  router.put('/personal/categories/:categoryId', async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const { categoryId } = req.params;
+      const body = categoryBudgetBodySchema.parse(req.body);
+      const budget = await storage.upsertPersonalCategoryBudget({
+        userId,
+        categoryId,
+        ...body,
+      });
+      res.json(budget);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors[0].message });
+      }
+      console.error('Set personal category budget error:', error);
+      res.status(500).json({ error: 'Errore' });
+    }
+  });
+
+  // Personal budget status (with category breakdown)
+  router.get('/personal/status', async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const member = await storage.getFamilyMember(userId);
+      if (!member) {
+        return res.status(400).json({ error: 'Non fai parte di una famiglia' });
+      }
+
+      const month = parseInt(req.query.month as string) || (new Date().getMonth() + 1);
+      const year = parseInt(req.query.year as string) || new Date().getFullYear();
+
+      const [personalBudget, personalCategoryBudgets, categories] = await Promise.all([
+        storage.getPersonalBudget(userId, month, year),
+        storage.getPersonalCategoryBudgets(userId, month, year),
+        storage.getCategories(member.familyId, userId),
+      ]);
+
+      const categoryStatus = await Promise.all(
+        personalCategoryBudgets.map(async (pcb) => {
+          const spent = await storage.getPersonalCategorySpending(userId, pcb.categoryId, month, year);
+          const spentNum = parseFloat(spent);
+          const capNum = parseFloat(pcb.amount);
+          const percentage = capNum > 0 ? (spentNum / capNum) * 100 : 0;
+          const category = categories.find(c => c.id === pcb.categoryId);
+
+          let alertLevel: 'ok' | 'warning' | 'danger' | 'exceeded' = 'ok';
+          if (percentage >= 100) alertLevel = 'exceeded';
+          else if (percentage >= 80) alertLevel = 'danger';
+          else if (percentage >= 60) alertLevel = 'warning';
+
+          return {
+            ...pcb,
+            categoryName: category?.name,
+            categoryIcon: category?.icon,
+            categoryColor: category?.color,
+            spent,
+            percentage: Math.round(percentage * 10) / 10,
+            alertLevel,
+          };
+        })
+      );
+
+      res.json({
+        personalBudget,
+        categories: categoryStatus,
+        month,
+        year,
+      });
+    } catch (error) {
+      console.error('Get personal budget status error:', error);
+      res.status(500).json({ error: 'Errore' });
     }
   });
 

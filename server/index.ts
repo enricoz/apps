@@ -1,4 +1,6 @@
 import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import { neon } from '@neondatabase/serverless';
@@ -18,6 +20,8 @@ import { createAnalyticsRoutes } from './routes/analytics';
 import { createIncomeRoutes } from './routes/incomes';
 import { createAccountRoutes } from './routes/accounts';
 import { createSubscriptionRoutes } from './routes/subscriptions';
+import { createImportRoutes } from './routes/import';
+import { createExportRoutes } from './routes/export';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -94,6 +98,20 @@ app.use('/api/analytics', createAnalyticsRoutes(storage));
 app.use('/api/incomes', createIncomeRoutes(storage));
 app.use('/api/accounts', createAccountRoutes(storage));
 app.use('/api/subscriptions', createSubscriptionRoutes(storage));
+app.use('/api/import', createImportRoutes(storage));
+app.use('/api/export', createExportRoutes(storage));
+
+// Serve static files in production
+if (process.env.NODE_ENV === 'production') {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const clientDist = path.resolve(__dirname, '..', 'dist', 'client');
+  app.use(express.static(clientDist));
+  // SPA fallback: serve index.html for all non-API routes
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/')) return next();
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
